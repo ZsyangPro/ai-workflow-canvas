@@ -1,0 +1,26 @@
+# Secrets — never in git
+.env
+*.pem
+*_secret*
+claude-config-backup.md
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+ai-workflow-canvas-vue/dist/
+server/dist/
+
+# Runtime data
+server/data/assets/
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

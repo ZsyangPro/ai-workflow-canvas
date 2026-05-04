@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  password     String
+  role         Role     @default(USER)
+  tokenVersion Int      @default(0)
+  credits      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  canvases             Canvas[]
+  creditTransactions    CreditTransaction[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model AiModel {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  provider    String   @default("sophnet")
+  baseUrl     String   @default("https://www.sophnet.com/api/open-apis/projects/easyllms")
+  apiKey      String
+  modelName   String
+  category    String   @default("image")
+  enabled     Boolean  @default(true)
+  description String?
+  costCredits Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Canvas {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String           @default("未命名画布")
+  nodes     Json             @default("[]")
+  edges     Json             @default("[]")
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  assets    GeneratedAsset[]
+
+  @@index([userId])
+}
+
+model GeneratedAsset {
+  id        Int      @id @default(autoincrement())
+  canvasId  Int
+  canvas    Canvas   @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+  nodeId    String?
+  filename  String
+  mimeType  String   @default("image/png")
+  prompt    String?
+  modelName String?
+  createdAt DateTime @default(now())
+
+  @@index([canvasId])
+  @@index([nodeId])
+}
+
+model CreditTransaction {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount         Int
+  type           String
+  relatedModelId Int?
+  description    String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
