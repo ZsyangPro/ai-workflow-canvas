@@ -61,11 +61,9 @@ PostgreSQL with Prisma. Schema: User → Canvas → GeneratedAsset, User → Cre
 
 ## Production deployment
 
-- **Entry**: `http://163.61.202.138:18080` (load balancer, needs backend config to reach `176.2.0.15:5179`)
-- **Jump host**: `163.61.202.173:10026` → app server `176.2.0.15:10026` (internal)
-- **App server**: Node v20.20.2 (GLIBC 2.17 build), PostgreSQL 16.8 (compiled), Nginx on :5179 reverse-proxying /api/ to Express :3000
-- **Backend managed by**: `systemctl` (canvas-api.service), not PM2
-- **SSH key**: `/tmp/ningxia_deploy` (local), jump server key at `~/.ssh/jump_to_app`
-- **Tunnel for local testing**: `ssh -i /tmp/ningxia_deploy -o "ProxyCommand ssh ... jump 'nc 176.2.0.15 10026'" -L 18080:127.0.0.1:5179 -p 10026 -N root@176.2.0.15`
-- App server has no internet access; Prisma migrations applied manually via psql
-- Frontend must be built locally (Vite needs macOS native bindings); backend tsc runs on server
+See `DEPLOY.md` for full server inventory, SSH keys, access commands, and maintenance procedures. Key points:
+
+- **Entry**: `http://163.61.202.138:18080` (LB, needs config to reach `176.2.0.15:5179`). Use SSH tunnel for local access.
+- **App server**: `176.2.0.15` (via jump `163.61.202.173:10026`), no internet. Frontend built locally, backend tsc on server.
+- **Backend managed by**: `systemctl` (canvas-api.service)
+- **Deploy**: `./scripts/deploy.sh`

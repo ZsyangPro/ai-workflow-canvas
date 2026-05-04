@@ -3,6 +3,7 @@
 *.pem
 *_secret*
 claude-config-backup.md
+DEPLOY.md
 
 # Dependencies
 node_modules/
