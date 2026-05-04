@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken'
 import { z } from 'zod'
 import rateLimit from 'express-rate-limit'
 import prisma from '../lib/prisma'
-import { authMiddleware, AuthPayload } from '../middleware/auth'
+import { authMiddleware, AuthPayload, clearTvCache } from '../middleware/auth'
 
 const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET
@@ -18,18 +18,20 @@ const router = Router()
 
 // 速率限制
 const loginLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 分钟
+  windowMs: 60 * 1000,
   max: 5,
   message: { error: '登录尝试过于频繁，请稍后再试' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
 })
 
 const registerLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 分钟
+  windowMs: 15 * 60 * 1000,
   max: 3,
   message: { error: '注册过于频繁，请稍后再试' },
   standardHeaders: true,
+  skip: () => process.env.NODE_ENV === 'test',
   legacyHeaders: false,
 })
 
@@ -143,6 +145,7 @@ router.post('/logout', authMiddleware, async (req: Request, res: Response): Prom
       where: { id: req.user!.userId },
       data: { tokenVersion: { increment: 1 } },
     })
+    clearTvCache(req.user!.userId)
     res.json({ success: true })
   } catch {
     res.status(500).json({ error: '退出失败' })

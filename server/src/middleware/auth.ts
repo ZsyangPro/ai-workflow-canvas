@@ -9,6 +9,10 @@ if (!ACCESS_SECRET) throw new Error('缺少环境变量 JWT_ACCESS_SECRET')
 const tvCache = new Map<number, { version: number; ts: number }>()
 const TV_CACHE_TTL = 30_000
 
+export function clearTvCache(userId: number) {
+  tvCache.delete(userId)
+}
+
 export interface AuthPayload {
   userId: number
   username: string
