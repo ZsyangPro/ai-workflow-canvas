@@ -35,7 +35,7 @@
           <div v-else-if="loadError" class="flex flex-col items-center gap-3 py-16">
             <span class="text-xs text-zinc-500">{{ loadError }}</span>
             <button
-              @click="fetchAssets"
+              @click="fetchAssets()"
               class="text-xs text-emerald-400 hover:text-emerald-300 cursor-pointer"
             >重试</button>
           </div>

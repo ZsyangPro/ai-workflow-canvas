@@ -241,7 +241,7 @@
           <div class="flex gap-1.5">
             <button
               v-for="opt in webSearchOptions"
-              :key="opt.value"
+              :key="String(opt.value)"
               @click="enableWebSearch = opt.value"
               class="flex-1 text-[11px] py-1.5 rounded-md transition-all duration-150"
               :class="opt.value === enableWebSearch
@@ -305,10 +305,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick, inject } from 'vue'
+import type { ComputedRef } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { Sparkles, Loader2, ImageIcon, ChevronRight, ChevronLeft, Globe, Zap, Banana, X } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
-import type { ComputedRef } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -318,7 +318,7 @@ const props = defineProps<{
   selected?: boolean
 }>()
 
-const { edges, findNode, removeNodes, onViewportChange } = useVueFlow()
+const { edges, findNode, removeNodes, onViewportChange, updateNodeData } = useVueFlow()
 const { apiFetch, currentUser } = useAuth()
 const canvasId = inject<ComputedRef<number>>('canvasId')
 const refreshCredits = inject<() => Promise<number>>('refreshCredits', async () => 0)
@@ -384,7 +384,7 @@ function updatePanelPositions() {
 }
 
 // Reposition panels on viewport change or window resize (no polling)
-let viewportCleanup: (() => void) | null = null
+let viewportCleanup: { off: () => void } | null = null
 
 function startPosTracking() {
   if (viewportCleanup) return
@@ -394,7 +394,7 @@ function startPosTracking() {
 
 function stopPosTracking() {
   if (viewportCleanup) {
-    viewportCleanup()
+    viewportCleanup.off()
     viewportCleanup = null
   }
   window.removeEventListener('resize', updatePanelPositions)
@@ -505,21 +505,21 @@ function ratioToSize(ratio: string, quality: string): string {
 
 function selectModel(m: (typeof models.value)[0]) {
   selectedModelId.value = m.id
-  if (!props.data) props.data = {}
-  props.data.selectedModelId = m.id
+  const patch: Record<string, unknown> = { selectedModelId: m.id }
   modelPanelOpen.value = false
   stopPosTracking()
   const mn = m.modelName as string
   if (mn && modelQualities[mn]) {
     selectedQuality.value = modelQualities[mn][0]
-    props.data.selectedQuality = modelQualities[mn][0]
+    patch.selectedQuality = modelQualities[mn][0]
   }
   if (m.provider === 'sophnet') {
     selectedCount.value = 1
     enableWebSearch.value = false
-    props.data.selectedCount = 1
-    props.data.enableWebSearch = false
+    patch.selectedCount = 1
+    patch.enableWebSearch = false
   }
+  updateNodeData(props.id, { ...props.data, ...patch })
 }
 
 function openLightbox() {
@@ -639,7 +639,7 @@ const handleClick = async () => {
   if (!canGenerate.value) return
   loading.value = true
   images.value = []
-  if (props.data.images) props.data.images.length = 0
+  if (props.data?.images) props.data.images.length = 0
   currentIndex.value = 0
   error.value = ''
 
@@ -691,9 +691,8 @@ const handleClick = async () => {
     if (result.url) {
       images.value = [...images.value, result.url]
       // 写入 node.data 以随 canvas 持久化
-      if (!props.data) props.data = {}
-      if (!props.data.images) props.data.images = []
-      props.data.images.push(result.url)
+      const existingImages = (props.data?.images as string[] | undefined) || []
+      updateNodeData(props.id, { ...props.data, images: [...existingImages, result.url] })
       progressMessage.value = `已生成 ${images.value.length}/${count} 张...`
     }
   }

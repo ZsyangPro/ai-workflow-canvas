@@ -230,7 +230,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
-import type { Node, Connection, GraphNode, GraphEdge, VueFlowStore } from '@vue-flow/core'
+import type { Connection, GraphNode, GraphEdge, VueFlowStore } from '@vue-flow/core'
 import { LogOut, User, Shield, MousePointerClick, Video, ImageIcon, Type, Wand2, Trash2, ChevronDown, Home, Sparkles, Zap } from 'lucide-vue-next'
 import InputNode from '../nodes/InputNode.vue'
 import GenerateNode from '../nodes/GenerateNode.vue'
@@ -326,15 +326,6 @@ async function fetchRecentCanvases() {
   } catch { /* ignore */ }
 }
 
-async function createNewCanvas() {
-  try {
-    const res = await apiFetch('/api/canvas', { method: 'POST', body: JSON.stringify({}) })
-    if (res.ok) {
-      const data = await res.json()
-      router.push(`/canvas/${data.canvas.id}`)
-    }
-  } catch { /* ignore */ }
-}
 
 function openCanvas(id: number) {
   cleanupEmptyCanvas()
@@ -427,10 +418,14 @@ async function loadCanvas() {
       if (data.nodes?.length) {
         nodes.value = data.nodes as GraphNode[]
         edges.value = data.edges as GraphEdge[]
-        const maxNum = [...nodes.value.map(n => n.id), ...edges.value.map(e => e.id)]
-          .map(id => { const m = (id as string).match(/\d+$/); return m ? parseInt(m[0], 10) : 0 })
-          .reduce((a, b) => Math.max(a, b), 0)
-        idCounter = maxNum
+	        const allIds: string[] = []
+	        for (const n of nodes.value) allIds.push(String(n.id))
+	        for (const e of edges.value) allIds.push(String(e.id))
+	        const maxNum = allIds.reduce((a: number, id: string) => {
+	          const m = id.match(/\d+$/)
+	          return Math.max(a, m ? parseInt(m[0], 10) : 0)
+	        }, 0)
+			idCounter = maxNum
       }
     } else if (res.status === 403 || res.status === 404) {
       // Canvas not found — create a new one
@@ -457,9 +452,10 @@ function saveCanvas() {
     return
   }
 
-  const cleanNodes = nodes.value.map(({ id, type, position, data }) => ({ id, type, position, data }))
-  const cleanEdges = edges.value.map(({ id, source, target, sourceHandle, targetHandle }) => ({
-    id, source, target, sourceHandle, targetHandle, animated: true, style: { stroke: '#555', strokeWidth: 2 },
+  const cleanNodes = (nodes.value as Array<Record<string, unknown>>).map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data }))
+  const cleanEdges = (edges.value as Array<Record<string, unknown>>).map((e) => ({
+    id: e.id, source: e.source, target: e.target, sourceHandle: e.sourceHandle, targetHandle: e.targetHandle,
+    animated: true, style: { stroke: '#555', strokeWidth: 2 },
   }))
   apiFetch(`/api/canvas/${canvasId.value}`, {
     method: 'PUT', body: JSON.stringify({ nodes: cleanNodes, edges: cleanEdges }),
@@ -512,7 +508,7 @@ function goHome() {
 
 watch(canvasId, (n, o) => {
   if (n !== o) {
-    clearTimeout(saveTimer); saveTimer = null
+    if (saveTimer !== null) clearTimeout(saveTimer); saveTimer = null
     loaded.value = false; nodes.value = []; edges.value = []; idCounter = 0
     loadCanvas()
   }
