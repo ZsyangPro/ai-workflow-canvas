@@ -8,6 +8,9 @@ set -e
 #       跳板机 ~/.ssh/jump_to_app 可免密登录应用服务器
 # ============================================================
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 JUMP_HOST="163.61.202.173"
 JUMP_PORT="10026"
 APP_HOST="176.2.0.15"
@@ -27,19 +30,19 @@ remote_cmd() {
     "ssh -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -p '$APP_PORT' 'root@$APP_HOST' '$1'"
 }
 
-echo -e "${BLUE}[1/6] 构建前端...${NC}"
-cd "$(dirname "$0")/../ai-workflow-canvas-vue"
+echo -e "${BLUE}[1/7] 构建前端...${NC}"
+cd "$PROJECT_ROOT/ai-workflow-canvas-vue"
 npx vite build --outDir dist 2>&1 | tail -3
 
-echo -e "${BLUE}[2/6] 打包前端 dist...${NC}"
+echo -e "${BLUE}[2/7] 打包前端 dist...${NC}"
 tar czf /tmp/frontend_dist_deploy.tar.gz dist/
 
-echo -e "${BLUE}[3/6] 传输到应用服务器...${NC}"
+echo -e "${BLUE}[3/7] 传输到应用服务器...${NC}"
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/frontend_dist_deploy.tar.gz "root@$JUMP_HOST:/tmp/"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
   "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/frontend_dist_deploy.tar.gz 'root@$APP_HOST:/tmp/'"
 
-echo -e "${BLUE}[4/6] 部署前端...${NC}"
+echo -e "${BLUE}[4/7] 部署前端...${NC}"
 remote_cmd "
   rm -rf $APP_DIR/frontend/*
   cd /tmp && tar xzf frontend_dist_deploy.tar.gz
@@ -47,14 +50,32 @@ remote_cmd "
   echo 'Frontend deployed'
 "
 
-echo -e "${BLUE}[5/6] 构建并重启后端...${NC}"
+echo -e "${BLUE}[5/7] 构建并重启后端...${NC}"
 remote_cmd "
   export PATH=\"$NODE_BIN:$PSQL_BIN:/usr/local/bin:/usr/bin:/bin\"
   cd $APP_DIR/server/server && npm run build && systemctl restart canvas-api && sleep 2
   systemctl status canvas-api --no-pager | head -5
 "
 
-echo -e "${BLUE}[6/6] 验证...${NC}"
+echo -e "${BLUE}[6/7] 同步模型配置...${NC}"
+
+# 从本地数据库读取 AiModel，生成 UPSERT SQL
+cd "$PROJECT_ROOT"
+LOCAL_DB_URL="postgresql://zsyang@localhost:5432/ai_canvas" npx tsx scripts/sync-models.ts 2>/dev/null > /tmp/model_sync.sql
+
+# 传输 SQL 到应用服务器
+scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/model_sync.sql "root@$JUMP_HOST:/tmp/"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
+  "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/model_sync.sql 'root@$APP_HOST:/tmp/'"
+
+# 执行 SQL
+remote_cmd "
+  export PATH=\"$PSQL_BIN:\$PATH\"
+  psql -U postgres -d ai_canvas -f /tmp/model_sync.sql && rm /tmp/model_sync.sql
+"
+echo "模型配置已同步"
+
+echo -e "${BLUE}[7/7] 验证...${NC}"
 sleep 1
 remote_cmd "curl -s http://127.0.0.1:3000/api/health"
 echo ""
