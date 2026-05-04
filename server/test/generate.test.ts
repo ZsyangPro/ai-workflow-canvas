@@ -29,9 +29,20 @@ describe('POST /api/generate', () => {
     const r = await request(app).post('/api/auth/register').send({ username: name, password: testPass })
     token = r.body.accessToken
 
-    const mr = await request(app).get('/api/models').set('Authorization', `Bearer ${token}`)
-    const models = mr.body.models
-    if (models.length > 0) modelId = models[0].id
+    // Ensure a test model exists in CI's empty database
+    const existing = await prisma.aiModel.findFirst({ where: { enabled: true } })
+    if (!existing) {
+      const created = await prisma.aiModel.create({
+        data: {
+          name: '__test_model__', provider: 'seedream', baseUrl: 'http://test',
+          apiKey: 'sk-test', modelName: 'test-model', category: 'image',
+          enabled: true, costCredits: 1,
+        },
+      })
+      modelId = created.id
+    } else {
+      modelId = existing.id
+    }
 
     const cr = await request(app).post('/api/canvas').set('Authorization', `Bearer ${token}`)
     canvasId = cr.body.canvas.id

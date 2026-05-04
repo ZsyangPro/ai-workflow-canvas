@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import request from 'supertest'
-import { app, uid, cleanup } from './setup'
+import { app, uid, cleanup, prisma } from './setup'
 
 const PFX = 'mdl'
 const testPass = 'test123456'
@@ -12,6 +12,18 @@ describe('GET /api/models', () => {
   beforeAll(async () => {
     const r = await request(app).post('/api/auth/register').send({ username: name, password: testPass })
     token = r.body.accessToken
+
+    // Ensure at least one model exists in CI's empty database
+    const count = await prisma.aiModel.count()
+    if (count === 0) {
+      await prisma.aiModel.create({
+        data: {
+          name: '__test_model__', provider: 'seedream', baseUrl: 'http://test',
+          apiKey: 'sk-test-masking', modelName: 'test-model', category: 'image',
+          enabled: true, costCredits: 1,
+        },
+      })
+    }
   })
 
   afterAll(() => cleanup(PFX))
