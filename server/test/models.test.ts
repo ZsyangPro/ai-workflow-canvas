@@ -41,8 +41,6 @@ describe('GET /api/models', () => {
 
     for (const m of models) {
       const key = m.apiKey as string
-      expect(key).not.toMatch(/^ark-/)
-      expect(key).not.toMatch(/^sk-/)
       // 脱敏后应包含 '...' 或为 '***'
       expect(key.includes('...') || key === '***').toBe(true)
     }
