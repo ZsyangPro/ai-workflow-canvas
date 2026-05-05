@@ -2,7 +2,6 @@ import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 import { authMiddleware } from '../middleware/auth'
-import { deleteFile } from '../lib/storage'
 
 const router = Router()
 
@@ -204,11 +203,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    // Delete asset files from disk
-    const assets = await prisma.generatedAsset.findMany({ where: { canvasId: id } })
-    await Promise.all(assets.map((a) => deleteFile(a.filename)))
-
-    // Delete canvas (cascade deletes GeneratedAsset rows)
+    // Delete canvas (assets survive via onDelete: SetNull)
     await prisma.canvas.delete({ where: { id } })
 
     res.json({ deleted: true })

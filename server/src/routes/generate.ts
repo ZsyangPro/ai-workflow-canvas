@@ -3,7 +3,7 @@ import { z } from 'zod'
 import prisma from '../lib/prisma'
 import { authMiddleware } from '../middleware/auth'
 import { getProvider } from '../lib/providers'
-import { downloadAndSave, saveBase64 } from '../lib/storage'
+import { downloadAndSave, saveBase64, fetchToBase64 } from '../lib/storage'
 
 const GENERATE_TIMEOUT_MS = 120_000
 
@@ -35,6 +35,7 @@ const generateSchema = z.object({
   optimize_mode: z.enum(['standard', 'fast']).optional(),
   enable_web_search: z.boolean().optional(),
   stream: z.boolean().optional(),
+  save: z.boolean().optional().default(true),
   nodeId: z.string().optional(),
 })
 
@@ -46,7 +47,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  const { modelId, canvasId, prompt, negative_prompt, size, ratio, images, max_images, output_format, watermark, optimize_mode, enable_web_search, stream, nodeId } = parsed.data
+  const { modelId, canvasId, prompt, negative_prompt, size, ratio, images, max_images, output_format, watermark, optimize_mode, enable_web_search, stream, save, nodeId } = parsed.data
 
   const aiModel = await prisma.aiModel.findUnique({ where: { id: modelId } })
   if (!aiModel || !aiModel.enabled) {
@@ -187,39 +188,53 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       genReq,
     ), GENERATE_TIMEOUT_MS, '生成请求')
 
-    // 下载图片到本地并创建资源记录
-    const savedImages: Array<{ url: string; id: number }> = []
+    // 处理生成的图片
+    const savedImages: Array<{ url?: string; b64_json?: string; id: number }> = []
 
     for (const img of result.images) {
       try {
-        let filename: string
-        let mimeType: string
+        if (save) {
+          // 自动保存到磁盘 + 数据库（兼容现有行为）
+          let filename: string
+          let mimeType: string
 
-        if (img.b64_json) {
-          const saved = await saveBase64(img.b64_json)
-          filename = saved.filename
-          mimeType = saved.mimeType
-        } else if (img.url) {
-          const saved = await downloadAndSave(img.url)
-          filename = saved.filename
-          mimeType = saved.mimeType
+          if (img.b64_json) {
+            const saved = await saveBase64(img.b64_json)
+            filename = saved.filename
+            mimeType = saved.mimeType
+          } else if (img.url) {
+            const saved = await downloadAndSave(img.url)
+            filename = saved.filename
+            mimeType = saved.mimeType
+          } else {
+            continue
+          }
+
+          const asset = await prisma.generatedAsset.create({
+            data: {
+              canvasId: canvas.id,
+              nodeId: nodeId || null,
+              filename,
+              mimeType,
+              prompt,
+              modelName: aiModel.modelName,
+            },
+          })
+          savedImages.push({ url: `/api/assets/${filename}`, id: asset.id })
         } else {
-          continue
+          // 不落盘，返回 base64 给前端
+          let b64: string
+          if (img.b64_json) {
+            b64 = img.b64_json
+          } else if (img.url) {
+            b64 = await fetchToBase64(img.url)
+          } else {
+            continue
+          }
+          savedImages.push({ b64_json: b64, id: 0 })
         }
-
-        const asset = await prisma.generatedAsset.create({
-          data: {
-            canvasId: canvas.id,
-            nodeId: nodeId || null,
-            filename,
-            mimeType,
-            prompt,
-            modelName: aiModel.modelName,
-          },
-        })
-        savedImages.push({ url: `/api/assets/${filename}`, id: asset.id })
       } catch {
-        // 单张下载失败，回退到原始 URL
+        // 单张下载失败
         if (img.url) {
           savedImages.push({ url: img.url, id: 0 })
         }

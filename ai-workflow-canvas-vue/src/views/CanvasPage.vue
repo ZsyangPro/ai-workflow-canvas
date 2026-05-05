@@ -186,7 +186,8 @@
           class="flex items-center gap-1 text-sm transition-colors cursor-pointer"
           :class="resourcePanelOpen ? 'text-emerald-400' : 'text-[#9CA3AF] hover:text-zinc-300'"
         >
-          <span>素材库</span>
+          <Star :size="14" />
+          <span>我的收藏</span>
         </button>
         <span class="w-px h-4 bg-white/10" />
         <router-link
@@ -231,7 +232,7 @@ import '@vue-flow/core/dist/style.css'
 import '@vue-flow/controls/dist/style.css'
 import '@vue-flow/minimap/dist/style.css'
 import type { Connection, GraphNode, GraphEdge, VueFlowStore } from '@vue-flow/core'
-import { LogOut, User, Shield, MousePointerClick, Video, ImageIcon, Type, Wand2, Trash2, ChevronDown, Home, Sparkles, Zap } from 'lucide-vue-next'
+import { LogOut, User, Shield, MousePointerClick, Video, ImageIcon, Type, Wand2, Trash2, ChevronDown, Home, Sparkles, Zap, Star } from 'lucide-vue-next'
 import InputNode from '../nodes/InputNode.vue'
 import GenerateNode from '../nodes/GenerateNode.vue'
 import ContextMenu from '../components/ContextMenu.vue'
@@ -340,7 +341,7 @@ async function cleanupEmptyCanvas() {
 
 async function deleteCanvas(id: number, name: string) {
   const ok = await confirmRef.value?.confirm(
-    `确定删除画布「${name}」？画布内的所有节点、连线和生成图片将被永久删除。`,
+    `确定删除画布「${name}」？节点和连线将被永久删除。已收藏的素材将保留在素材库中。`,
     { title: '删除画布', okText: '删除' },
   )
   if (!ok) return

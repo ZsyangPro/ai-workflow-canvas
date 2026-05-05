@@ -50,6 +50,17 @@ export async function saveBase64(base64: string): Promise<{ filename: string; mi
 }
 
 /**
+ * 从 URL 下载图片并转为 base64 data URI，不落盘。
+ */
+export async function fetchToBase64(imageUrl: string): Promise<string> {
+  const res = await fetch(imageUrl)
+  if (!res.ok) throw new Error(`下载图片失败: ${res.status}`)
+  const buffer = Buffer.from(await res.arrayBuffer())
+  const contentType = res.headers.get('content-type') || 'image/png'
+  return `data:${contentType};base64,${buffer.toString('base64')}`
+}
+
+/**
  * 删除本地资产文件。
  */
 export async function deleteFile(filename: string): Promise<void> {

@@ -100,17 +100,32 @@
 
       <!-- Image display — fills node width, height auto-adapts -->
       <div
-        class="w-full rounded-lg flex items-center justify-center overflow-hidden border border-zinc-700/30 cursor-pointer"
+        class="w-full rounded-lg flex items-center justify-center overflow-hidden cursor-pointer relative group/img"
         :style="{ minHeight: '120px', background: 'rgba(255,255,255,0.03)' }"
+        :class="currentImage && !currentImage.collected
+          ? 'border border-dashed border-white/20'
+          : 'border border-zinc-700/30'"
         @click="openLightbox"
       >
         <img
           v-if="currentImage"
-          :src="currentImage"
+          :src="currentImage.src"
           alt="generated"
           class="w-full h-auto"
         />
-        <div v-else class="flex flex-col items-center gap-2 text-zinc-600 py-8">
+        <!-- Collect star -->
+        <button
+          v-if="currentImage && !currentImage.collected"
+          @click.stop="collectImage(currentIndex)"
+          class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center opacity-30 group-hover/img:opacity-100 transition-opacity cursor-pointer"
+          title="收藏"
+        >
+          <Star :size="14" class="text-white" />
+        </button>
+        <div v-if="currentImage?.collected" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center cursor-default">
+          <Star :size="14" class="text-emerald-400 fill-emerald-400" />
+        </div>
+        <div v-else-if="!currentImage" class="flex flex-col items-center gap-2 text-zinc-600 py-8">
           <ImageIcon class="w-10 h-10" :size="40" />
           <span class="text-xs">{{ loading ? (progressMessage || '正在请求模型...') : '等待生成' }}</span>
         </div>
@@ -122,12 +137,17 @@
           v-for="(img, i) in images"
           :key="i"
           @click="currentIndex = i"
-          class="w-7 h-7 rounded text-xs flex items-center justify-center transition-colors"
+          class="w-7 h-7 rounded text-xs flex items-center justify-center transition-colors relative"
           :class="i === currentIndex
             ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/40'
             : 'bg-[#252525] text-[#666666] border border-[#333333] hover:text-zinc-300 cursor-pointer'"
         >
-          <img :src="img" class="w-5 h-5 rounded object-cover" />
+          <img :src="img.src" class="w-5 h-5 rounded object-cover" />
+          <Star
+            v-if="img.collected"
+            :size="8"
+            class="absolute -top-1 -right-1 text-emerald-400 fill-emerald-400"
+          />
         </button>
       </div>
 
@@ -286,10 +306,20 @@
 
       <!-- Image -->
       <img
-        :src="images[lightboxIndex]"
+        :src="images[lightboxIndex]?.src"
         class="max-w-[90vw] max-h-[90vh] object-contain"
         alt="preview"
       />
+
+      <!-- Collect button in lightbox -->
+      <button
+        v-if="images[lightboxIndex] && !images[lightboxIndex].collected"
+        @click="collectImage(lightboxIndex)"
+        class="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm flex items-center gap-2 cursor-pointer transition-colors"
+      >
+        <Star :size="16" />
+        收藏此图片
+      </button>
 
       <!-- Next button -->
       <button
@@ -307,7 +337,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick, inject } from 'vue'
 import type { ComputedRef } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { Sparkles, Loader2, ImageIcon, ChevronRight, ChevronLeft, Globe, Zap, Banana, X } from 'lucide-vue-next'
+import { Sparkles, Loader2, ImageIcon, ChevronRight, ChevronLeft, Globe, Zap, Banana, X, Star } from 'lucide-vue-next'
 import { useAuth } from '../composables/useAuth'
 
 defineOptions({ inheritAttrs: false })
@@ -323,6 +353,12 @@ const { apiFetch, currentUser } = useAuth()
 const canvasId = inject<ComputedRef<number>>('canvasId')
 const refreshCredits = inject<() => Promise<number>>('refreshCredits', async () => 0)
 
+interface GenImage {
+  src: string
+  base64?: string
+  collected: boolean
+}
+
 // --- refs ---
 const nodeRoot = ref<HTMLElement | null>(null)
 const modelTriggerRef = ref<HTMLElement | null>(null)
@@ -331,7 +367,7 @@ const paramTriggerRef = ref<HTMLElement | null>(null)
 // --- state ---
 const hover = ref(false)
 const loading = ref(false)
-const images = ref<string[]>([])
+const images = ref<GenImage[]>([])
 const currentIndex = ref(0)
 const error = ref('')
 const credits = ref(0)
@@ -522,6 +558,27 @@ function selectModel(m: (typeof models.value)[0]) {
   updateNodeData(props.id, { ...props.data, ...patch })
 }
 
+async function collectImage(index: number) {
+  const img = images.value[index]
+  if (!img || img.collected || !img.base64) return
+
+  try {
+    const res = await apiFetch('/api/assets/save', {
+      method: 'POST',
+      body: JSON.stringify({
+        image: img.base64,
+        canvasId: canvasId?.value,
+        nodeId: props.id,
+        prompt: promptText.value,
+        modelName: selectedModel.value?.modelName,
+      }),
+    })
+    if (res.ok) {
+      images.value[index] = { ...img, collected: true }
+    }
+  } catch { /* silent */ }
+}
+
 function openLightbox() {
   if (!currentImage.value) return
   lightboxIndex.value = currentIndex.value
@@ -592,12 +649,7 @@ onMounted(async () => {
     }
   } catch { /* silent */ }
 
-  // 从 node.data 恢复已持久化的图片
-  if (props.data?.images?.length) {
-    images.value = props.data.images as string[]
-  }
-
-  // 从 node.data 恢复模型选择等状态
+  // 从 node.data 恢复模型选择等状态（不恢复图片，节点不持久化素材）
   if (props.data?.selectedModelId) {
     selectedModelId.value = props.data.selectedModelId as number
   }
@@ -639,7 +691,6 @@ const handleClick = async () => {
   if (!canGenerate.value) return
   loading.value = true
   images.value = []
-  if (props.data?.images) props.data.images.length = 0
   currentIndex.value = 0
   error.value = ''
 
@@ -659,6 +710,7 @@ const handleClick = async () => {
     prompt: promptText.value,
     size,
     enable_web_search: enableWebSearch.value,
+    save: false,
     nodeId: props.id,
   }
   if (connectedImages.value.length > 0) {
@@ -666,7 +718,7 @@ const handleClick = async () => {
   }
 
   // Fire N parallel requests, each generates exactly 1 image
-  const requests: Promise<{ url?: string; error?: string }>[] = []
+  const requests: Promise<{ b64?: string; error?: string }>[] = []
   for (let i = 0; i < count; i++) {
     requests.push(
       apiFetch('/api/generate', {
@@ -675,7 +727,7 @@ const handleClick = async () => {
       }).then(async (res) => {
         const data = await res.json()
         if (res.ok && data.images?.length) {
-          return { url: data.images[0].url as string }
+          return { b64: (data.images[0].b64_json as string) || undefined }
         } else if (res.status === 402) {
           return { error: '算力不足' }
         } else {
@@ -688,11 +740,8 @@ const handleClick = async () => {
   // Collect results one at a time as they complete
   for (const req of requests) {
     const result = await req
-    if (result.url) {
-      images.value = [...images.value, result.url]
-      // 写入 node.data 以随 canvas 持久化
-      const existingImages = (props.data?.images as string[] | undefined) || []
-      updateNodeData(props.id, { ...props.data, images: [...existingImages, result.url] })
+    if (result.b64) {
+      images.value = [...images.value, { src: result.b64, base64: result.b64, collected: false }]
       progressMessage.value = `已生成 ${images.value.length}/${count} 张...`
     }
   }
