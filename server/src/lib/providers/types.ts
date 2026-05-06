@@ -2,6 +2,7 @@ export interface GenerateRequest {
   prompt: string
   negative_prompt?: string
   size?: string
+  quality?: 'low' | 'medium' | 'high'
   images?: string[]
   max_images?: number
   output_format?: 'png' | 'jpeg'

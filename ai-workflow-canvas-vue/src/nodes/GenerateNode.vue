@@ -212,19 +212,19 @@
           <div class="text-[10px] text-[#666666] mb-1.5">比例</div>
           <div class="grid grid-cols-5 gap-1">
             <button
-              v-for="r in ratios"
+              v-for="r in availableRatios"
               :key="r"
               @click="selectedRatio = r"
-              class="text-[11px] py-1.5 rounded-md transition-all duration-150"
+              class="text-[11px] py-1.5 rounded-md transition-all duration-150 flex flex-col items-center justify-center gap-0.5"
               :class="r === selectedRatio
                 ? 'bg-emerald-500/25 text-emerald-400 border border-emerald-500/30'
                 : 'text-[#888888] hover:text-zinc-300 hover:bg-white/[0.04] border border-transparent cursor-pointer'"
-            >{{ r }}</button>
+            ><span class="inline-block rounded-[2px] border border-current opacity-50" :style="ratioPreviewStyle(r)" /><span>{{ r }}</span></button>
           </div>
         </div>
 
         <!-- Quality -->
-        <div>
+        <div v-if="isSeedream || isGptImage">
           <div class="text-[10px] text-[#666666] mb-1.5">画质</div>
           <div class="flex gap-1.5">
             <button
@@ -384,7 +384,24 @@ const selectedQuality = ref('2K')
 const selectedCount = ref(1)
 const enableWebSearch = ref(false)
 
-const ratios = ['1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9']
+const ratios = ['1:8', '1:4', '9:16', '2:3', '3:4', '4:5', '1:1', '5:4', '4:3', '3:2', '16:9', '21:9', '4:1', '8:1']
+
+const availableRatios = computed(() => {
+  if (currentModelProvider.value === 'seedream') return ratios
+  return ['auto', ...ratios.filter(r => r !== '1:8' && r !== '8:1')]
+})
+
+const MAX_PREVIEW = 20 // px
+function ratioPreviewStyle(r: string) {
+  if (r === 'auto') return { width: `${MAX_PREVIEW}px`, height: `${MAX_PREVIEW}px`, borderStyle: 'dashed' as const }
+  const [w, h] = r.split(':').map(Number)
+  if (!w || !h) return { width: `${MAX_PREVIEW}px`, height: `${MAX_PREVIEW}px` }
+  const scale = MAX_PREVIEW / Math.max(w, h)
+  return {
+    width: `${Math.round(w * scale)}px`,
+    height: `${Math.round(h * scale)}px`,
+  }
+}
 const countOptions = [1, 4, 9]
 const webSearchOptions = [
   { label: '开启', value: true },
@@ -396,6 +413,8 @@ const modelQualities: Record<string, string[]> = {
   'doubao-seedream-5-0-lite-260128': ['2K', '3K', '4K'],
   'doubao-seedream-4-5-251128': ['2K', '4K'],
   'doubao-seedream-4-0-250828': ['1K', '2K', '4K'],
+  'gpt-image-2': ['low', 'medium', 'high'],
+  'gpt-image-1.5': ['low', 'medium', 'high'],
 }
 
 // --- panel positioning ---
@@ -502,14 +521,17 @@ const connectedImages = computed(() => {
   return imgs
 })
 
-const supportsMultiImage = computed(() => currentModelProvider.value === 'seedream')
+const supportsMultiImage = computed(() => currentModelProvider.value === 'seedream' || currentModelProvider.value === 'gpt-image')
 const supportsWebSearch = computed(() => currentModelProvider.value === 'seedream')
+const isSeedream = computed(() => currentModelProvider.value === 'seedream')
+const isGptImage = computed(() => currentModelProvider.value === 'gpt-image')
 
 const availableQualities = computed(() => {
-  if (currentModelProvider.value !== 'seedream') return ['1K', '2K']
   const mn = selectedModel.value?.modelName as string
   if (mn && modelQualities[mn]) return modelQualities[mn]
-  return ['1K', '2K', '4K']
+  if (isSeedream.value) return ['1K', '2K', '4K']
+  if (isGptImage.value) return ['low', 'medium', 'high']
+  return ['1K', '2K']
 })
 
 const currentRatio = computed(() => selectedRatio.value)
@@ -522,7 +544,7 @@ const canGenerate = computed(() => {
 
 // --- methods ---
 function qLabel(q: string): string {
-  const labels: Record<string, string> = { '1K': '1K标清', '2K': '2K高清', '3K': '3K', '4K': '4K超清' }
+  const labels: Record<string, string> = { '1K': '1K标清', '2K': '2K高清', '3K': '3K', '4K': '4K超清', low: '快速', medium: '标准(较慢)', high: '高清(慢)' }
   return labels[q] || q
 }
 
@@ -549,11 +571,19 @@ function selectModel(m: (typeof models.value)[0]) {
     selectedQuality.value = modelQualities[mn][0]
     patch.selectedQuality = modelQualities[mn][0]
   }
-  if (m.provider === 'sophnet') {
+  if (m.provider === 'sophnet' || m.provider === 'sophnet-gemini') {
     selectedCount.value = 1
     enableWebSearch.value = false
+    selectedRatio.value = 'auto'
     patch.selectedCount = 1
     patch.enableWebSearch = false
+    patch.selectedRatio = 'auto'
+  }
+  if (m.provider === 'gpt-image') {
+    enableWebSearch.value = false
+    selectedRatio.value = 'auto'
+    patch.enableWebSearch = false
+    patch.selectedRatio = 'auto'
   }
   updateNodeData(props.id, { ...props.data, ...patch })
 }
@@ -575,8 +605,10 @@ async function collectImage(index: number) {
     })
     if (res.ok) {
       images.value[index] = { ...img, collected: true }
+    } else {
+      error.value = '收藏失败'
     }
-  } catch { /* silent */ }
+  } catch { error.value = '收藏失败' }
 }
 
 function openLightbox() {
@@ -703,12 +735,17 @@ const handleClick = async () => {
     return
   }
 
-  const size = ratioToSize(selectedRatio.value, selectedQuality.value)
+  // GPT-Image: 用 n 参数一次请求出多图，避免并行请求触发限流
+  // Seedream: 并行发 N 个请求（不支持 n 参数）
+  const gptCount = isGptImage.value ? count : undefined
+  const size = selectedRatio.value === 'auto' ? undefined : ratioToSize(selectedRatio.value, isGptImage.value ? '2K' : selectedQuality.value)
   const baseBody: Record<string, unknown> = {
     modelId: selectedModelId.value,
     canvasId: canvasId?.value,
     prompt: promptText.value,
     size,
+    quality: isGptImage.value ? selectedQuality.value : undefined,
+    max_images: gptCount,
     enable_web_search: enableWebSearch.value,
     save: false,
     nodeId: props.id,
@@ -717,32 +754,59 @@ const handleClick = async () => {
     baseBody.images = connectedImages.value
   }
 
-  // Fire N parallel requests, each generates exactly 1 image
-  const requests: Promise<{ b64?: string; error?: string }>[] = []
-  for (let i = 0; i < count; i++) {
-    requests.push(
-      apiFetch('/api/generate', {
+  if (isGptImage.value) {
+    // GPT-Image: 单次请求，n 参数控制数量
+    try {
+      const res = await apiFetch('/api/generate', {
         method: 'POST',
         body: JSON.stringify(baseBody),
-      }).then(async (res) => {
-        const data = await res.json()
-        if (res.ok && data.images?.length) {
-          return { b64: (data.images[0].b64_json as string) || undefined }
-        } else if (res.status === 402) {
-          return { error: '算力不足' }
-        } else {
-          return { error: (data as Record<string, string>).error || '生成失败' }
+      })
+      const data = await res.json()
+      if (res.ok && data.images?.length) {
+        for (const img of data.images) {
+          if (img.b64_json) {
+            images.value = [...images.value, { src: img.b64_json, base64: img.b64_json, collected: false }]
+          }
         }
-      }).catch(() => ({ error: '请求失败' }))
-    )
-  }
+      } else if (res.status === 402) {
+        error.value = '算力不足'
+      } else if (res.status === 504) {
+        error.value = '当前模型繁忙，试试其他模型'
+      } else {
+        error.value = (data as Record<string, string>).error || '生成失败'
+      }
+    } catch {
+      error.value = '当前模型繁忙，试试其他模型'
+    }
+  } else {
+    // Seedream: 并行请求，每个出 1 张
+    const requests: Promise<{ b64?: string; error?: string }>[] = []
+    for (let i = 0; i < count; i++) {
+      requests.push(
+        apiFetch('/api/generate', {
+          method: 'POST',
+          body: JSON.stringify(baseBody),
+        }).then(async (res) => {
+          const data = await res.json()
+          if (res.ok && data.images?.length) {
+            return { b64: (data.images[0].b64_json as string) || undefined }
+          } else if (res.status === 402) {
+            return { error: '算力不足' }
+          } else if (res.status === 504) {
+              return { error: '当前模型繁忙，试试其他模型' }
+          } else {
+            return { error: (data as Record<string, string>).error || '生成失败' }
+          }
+        }).catch(() => ({ error: '当前模型繁忙，试试其他模型' }))
+      )
+    }
 
-  // Collect results one at a time as they complete
-  for (const req of requests) {
-    const result = await req
-    if (result.b64) {
-      images.value = [...images.value, { src: result.b64, base64: result.b64, collected: false }]
-      progressMessage.value = `已生成 ${images.value.length}/${count} 张...`
+    for (const req of requests) {
+      const result = await req
+      if (result.b64) {
+        images.value = [...images.value, { src: result.b64, base64: result.b64, collected: false }]
+        progressMessage.value = `已生成 ${images.value.length}/${count} 张...`
+      }
     }
   }
 

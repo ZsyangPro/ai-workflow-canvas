@@ -5,7 +5,7 @@ import { authMiddleware } from '../middleware/auth'
 import { getProvider } from '../lib/providers'
 import { downloadAndSave, saveBase64, fetchToBase64 } from '../lib/storage'
 
-const GENERATE_TIMEOUT_MS = 120_000
+const GENERATE_TIMEOUT_MS = 60_000
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -32,6 +32,7 @@ const generateSchema = z.object({
   max_images: z.number().min(1).max(15).optional(),
   output_format: z.enum(['png', 'jpeg']).optional(),
   watermark: z.boolean().optional(),
+  quality: z.enum(['low', 'medium', 'high']).optional(),
   optimize_mode: z.enum(['standard', 'fast']).optional(),
   enable_web_search: z.boolean().optional(),
   stream: z.boolean().optional(),
@@ -47,7 +48,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  const { modelId, canvasId, prompt, negative_prompt, size, ratio, images, max_images, output_format, watermark, optimize_mode, enable_web_search, stream, save, nodeId } = parsed.data
+  const { modelId, canvasId, prompt, negative_prompt, size, quality, ratio, images, max_images, output_format, watermark, optimize_mode, enable_web_search, stream, save, nodeId } = parsed.data
 
   const aiModel = await prisma.aiModel.findUnique({ where: { id: modelId } })
   if (!aiModel || !aiModel.enabled) {
@@ -62,10 +63,11 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  // 检查算力（后续用原子更新防竞态，此处为快速失败）
+  // 检查算力（max_images 控制出图数量，消耗相应倍率算力）
+  const totalCost = aiModel.costCredits * (max_images || 1)
   const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
-  if (!user || user.credits < aiModel.costCredits) {
-    res.status(402).json({ error: `算力不足，需要 ${aiModel.costCredits} 算力，当前 ${user?.credits || 0} 算力` })
+  if (!user || user.credits < totalCost) {
+    res.status(402).json({ error: `算力不足，需要 ${totalCost} 算力，当前 ${user?.credits || 0} 算力` })
     return
   }
 
@@ -79,6 +81,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     prompt,
     negative_prompt,
     size,
+    quality,
     images,
     max_images,
     output_format,
@@ -93,14 +96,14 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     let deducted = false
     try {
       const updated = await prisma.user.update({
-        where: { id: req.user!.userId, credits: { gte: aiModel.costCredits } },
-        data: { credits: { decrement: aiModel.costCredits } },
+        where: { id: req.user!.userId, credits: { gte: totalCost } },
+        data: { credits: { decrement: totalCost } },
       })
       deducted = true
       await prisma.creditTransaction.create({
         data: {
           userId: req.user!.userId,
-          amount: -aiModel.costCredits,
+          amount: -totalCost,
           type: 'GENERATION_DEDUCTION',
           relatedModelId: aiModel.id,
           description: `调用模型 ${aiModel.name} 生成图片`,
@@ -127,12 +130,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
           await prisma.$transaction([
             prisma.user.update({
               where: { id: req.user!.userId },
-              data: { credits: { increment: aiModel.costCredits } },
+              data: { credits: { increment: totalCost } },
             }),
             prisma.creditTransaction.create({
               data: {
                 userId: req.user!.userId,
-                amount: aiModel.costCredits,
+                amount: totalCost,
                 type: 'GENERATION_REFUND',
                 relatedModelId: aiModel.id,
                 description: `流式生成失败退款 — ${aiModel.name}`,
@@ -162,12 +165,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     let updated
     try {
       updated = await prisma.user.update({
-        where: { id: req.user!.userId, credits: { gte: aiModel.costCredits } },
-        data: { credits: { decrement: aiModel.costCredits } },
+        where: { id: req.user!.userId, credits: { gte: totalCost } },
+        data: { credits: { decrement: totalCost } },
       })
     } catch (e: unknown) {
       if ((e as { code?: string }).code === 'P2025') {
-        res.status(402).json({ error: `算力不足，需要 ${aiModel.costCredits} 算力` })
+        res.status(402).json({ error: `算力不足，需要 ${totalCost} 算力` })
         return
       }
       throw e
@@ -176,7 +179,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     await prisma.creditTransaction.create({
       data: {
         userId: req.user!.userId,
-        amount: -aiModel.costCredits,
+        amount: -totalCost,
         type: 'GENERATION_DEDUCTION',
         relatedModelId: aiModel.id,
         description: `调用模型 ${aiModel.name} 生成图片`,
@@ -186,7 +189,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const result = await withTimeout(provider.generate(
       { baseUrl: aiModel.baseUrl, apiKey: aiModel.apiKey, modelName: aiModel.modelName },
       genReq,
-    ), GENERATE_TIMEOUT_MS, '生成请求')
+    ), GENERATE_TIMEOUT_MS * (max_images || 1), '生成请求')
 
     // 处理生成的图片
     const savedImages: Array<{ url?: string; b64_json?: string; id: number }> = []
@@ -231,7 +234,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
           } else {
             continue
           }
-          savedImages.push({ b64_json: b64, id: 0 })
+          // 确保 base64 有 data URI 前缀，前端 <img src> 直接使用
+          savedImages.push({ b64_json: b64.startsWith('data:') ? b64 : `data:image/png;base64,${b64}`, id: 0 })
         }
       } catch {
         // 单张下载失败
@@ -249,12 +253,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         await prisma.$transaction([
           prisma.user.update({
             where: { id: req.user!.userId },
-            data: { credits: { increment: aiModel.costCredits } },
+            data: { credits: { increment: totalCost } },
           }),
           prisma.creditTransaction.create({
             data: {
               userId: req.user!.userId,
-              amount: aiModel.costCredits,
+              amount: totalCost,
               type: 'GENERATION_REFUND',
               relatedModelId: aiModel.id,
               description: `生成失败退款 — ${aiModel.name}`,

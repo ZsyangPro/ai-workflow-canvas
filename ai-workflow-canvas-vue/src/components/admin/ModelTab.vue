@@ -132,6 +132,8 @@
                 class="w-full bg-[#252525] border border-[#333333] rounded-lg px-4 py-2.5 text-sm text-zinc-200 outline-none cursor-pointer"
               >
                 <option value="sophnet">Sophnet</option>
+                <option value="sophnet-gemini">Gemini (Nano Banana)</option>
+                <option value="gpt-image">GPT-Image (DALL-E)</option>
                 <option value="seedream">Seedream (火山方舟)</option>
               </select>
             </div>
@@ -371,6 +373,10 @@ function closeModal() {
 function onProviderChange() {
   if (form.value.provider === 'seedream') {
     form.value.baseUrl = 'https://ark.cn-beijing.volces.com/api/v3'
+  } else if (form.value.provider === 'gpt-image') {
+    form.value.baseUrl = 'https://www.sophnet.com/api/open-apis/projects/v1'
+  } else if (form.value.provider === 'sophnet-gemini' || form.value.provider === 'sophnet') {
+    form.value.baseUrl = 'https://www.sophnet.com/api/open-apis/projects/easyllms'
   }
 }
 
