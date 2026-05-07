@@ -20,7 +20,6 @@ APP_DIR="/var/www/ai-canvas"
 NODE_BIN="/usr/local/node-v20.20.2-linux-x64-glibc-217/bin/node"
 PSQL_BIN="/usr/local/pgsql-16/bin/psql"
 
-# 颜色输出
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m'
@@ -30,41 +29,48 @@ remote_cmd() {
     "ssh -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -p '$APP_PORT' 'root@$APP_HOST' '$1'"
 }
 
-echo -e "${BLUE}[1/8] 构建前端...${NC}"
+# ====== 前端：画布应用 ======
+
+echo -e "${BLUE}[1/10] 构建前端（画布）...${NC}"
 cd "$PROJECT_ROOT/ai-workflow-canvas-vue"
 npx vite build --outDir dist 2>&1 | tail -3
 
-echo -e "${BLUE}[2/8] 打包前端 dist...${NC}"
-tar czf /tmp/frontend_dist_deploy.tar.gz dist/
+echo -e "${BLUE}[2/10] 构建前端（管理端）...${NC}"
+cd "$PROJECT_ROOT/admin-app"
+npx vite build --outDir dist 2>&1 | tail -3
 
-echo -e "${BLUE}[3/8] 传输到应用服务器...${NC}"
-scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/frontend_dist_deploy.tar.gz "root@$JUMP_HOST:/tmp/"
+echo -e "${BLUE}[3/10] 打包 + 传输前端...${NC}"
+tar czf /tmp/frontend_dist_deploy.tar.gz -C "$PROJECT_ROOT/ai-workflow-canvas-vue" dist/
+tar czf /tmp/admin_dist_deploy.tar.gz -C "$PROJECT_ROOT/admin-app" dist/
+
+scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/frontend_dist_deploy.tar.gz /tmp/admin_dist_deploy.tar.gz "root@$JUMP_HOST:/tmp/"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
-  "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/frontend_dist_deploy.tar.gz 'root@$APP_HOST:/tmp/'"
+  "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/frontend_dist_deploy.tar.gz /tmp/admin_dist_deploy.tar.gz 'root@$APP_HOST:/tmp/'"
 
-echo -e "${BLUE}[4/8] 部署前端...${NC}"
+echo -e "${BLUE}[4/10] 部署前端...${NC}"
 remote_cmd "
   rm -rf $APP_DIR/frontend/*
-  cd /tmp && tar xzf frontend_dist_deploy.tar.gz
-  cp -r dist/* $APP_DIR/frontend/
-  echo 'Frontend deployed'
+  cd /tmp && tar xzf frontend_dist_deploy.tar.gz && cp -r dist/* $APP_DIR/frontend/ && rm -rf /tmp/frontend_dist_deploy.tar.gz /tmp/dist
+  mkdir -p $APP_DIR/admin
+  rm -rf $APP_DIR/admin/*
+  cd /tmp && tar xzf admin_dist_deploy.tar.gz && cp -r dist/* $APP_DIR/admin/ && rm -rf /tmp/admin_dist_deploy.tar.gz /tmp/dist
+  echo 'Frontend + Admin deployed'
 "
 
-echo -e "${BLUE}[5/8] 打包后端并构建...${NC}"
+# ====== 后端 ======
 
-# 本地：生成 Prisma 客户端 + 打包服务端源码和客户端
+echo -e "${BLUE}[5/10] 打包后端并构建...${NC}"
+
 cd "$PROJECT_ROOT/server"
 npx prisma generate 2>&1 | tail -2
 tar czf /tmp/server_bundle.tar.gz src/ package.json package-lock.json tsconfig.json prisma/ 2>&1
 cd node_modules && tar czf /tmp/prisma_client.tar.gz ./.prisma/client ./@prisma/client 2>&1
 
-# 传输到应用服务器
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/server_bundle.tar.gz "root@$JUMP_HOST:/tmp/"
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/prisma_client.tar.gz "root@$JUMP_HOST:/tmp/"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
   "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/server_bundle.tar.gz 'root@$APP_HOST:/tmp/' && scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/prisma_client.tar.gz 'root@$APP_HOST:/tmp/'"
 
-# 服务器端：更新源码 + Prisma 客户端 + 编译 + 重启
 remote_cmd "
   export PATH=\"$NODE_BIN:$PSQL_BIN:/usr/local/bin:/usr/bin:/bin\"
   cd $APP_DIR/server/server && tar xzf /tmp/server_bundle.tar.gz && rm /tmp/server_bundle.tar.gz
@@ -73,18 +79,17 @@ remote_cmd "
   systemctl status canvas-api --no-pager | head -5
 "
 
-echo -e "${BLUE}[6/8] 运行数据库迁移...${NC}"
+# ====== 数据库迁移 ======
 
-# 打包本地 migration SQL 文件
+echo -e "${BLUE}[6/10] 运行数据库迁移...${NC}"
+
 MIGRATION_DIR="$PROJECT_ROOT/server/prisma/migrations"
 tar czf /tmp/migrations_deploy.tar.gz -C "$MIGRATION_DIR" . 2>/dev/null
 
-# 传输到应用服务器
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/migrations_deploy.tar.gz "root@$JUMP_HOST:/tmp/"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
   "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/migrations_deploy.tar.gz 'root@$APP_HOST:/tmp/'"
 
-# 按序执行迁移 SQL（ON_ERROR_STOP=0 使已应用的迁移跳过不报错）
 remote_cmd "
   export PATH=\"$PSQL_BIN:\$PATH\"
   MIG_TMP=/tmp/migrations_deploy
@@ -98,32 +103,64 @@ remote_cmd "
     psql -U postgres -v ON_ERROR_STOP=0 -d ai_canvas -f \"\$sql_file\" 2>&1 | tail -1
   done
   rm -rf \$MIG_TMP /tmp/migrations_deploy.tar.gz
-  echo '迁移完成'
+  echo 'Schema migration done'
 "
 
-echo -e "${BLUE}[7/8] 同步模型配置...${NC}"
+echo -e "${BLUE}[7/10] 数据迁移（ADMIN → SUPER_ADMIN）...${NC}"
 
-# 从本地数据库读取 AiModel，生成 UPSERT SQL
+echo "UPDATE \"User\" SET \"role\" = 'SUPER_ADMIN' WHERE \"role\" = 'ADMIN';" > /tmp/role_migrate.sql
+
+scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/role_migrate.sql "root@$JUMP_HOST:/tmp/"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
+  "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/role_migrate.sql 'root@$APP_HOST:/tmp/'"
+
+remote_cmd "
+  export PATH=\"$PSQL_BIN:\$PATH\"
+  psql -U postgres -d ai_canvas -f /tmp/role_migrate.sql && rm /tmp/role_migrate.sql
+  echo 'Role migration done'
+"
+
+# ====== 模型同步 ======
+
+echo -e "${BLUE}[8/10] 同步模型配置...${NC}"
+
 cd "$PROJECT_ROOT"
 LOCAL_DB_URL="postgresql://zsyang@localhost:5432/ai_canvas" npx tsx scripts/sync-models.ts 2>/dev/null > /tmp/model_sync.sql
 
-# 传输 SQL 到应用服务器
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/model_sync.sql "root@$JUMP_HOST:/tmp/"
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
   "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/model_sync.sql 'root@$APP_HOST:/tmp/'"
 
-# 执行 SQL
 remote_cmd "
   export PATH=\"$PSQL_BIN:\$PATH\"
   psql -U postgres -d ai_canvas -f /tmp/model_sync.sql && rm /tmp/model_sync.sql
 "
 echo "模型配置已同步"
 
-echo -e "${BLUE}[8/8] 验证...${NC}"
+# ====== Nginx 提示 ======
+
+echo -e "${BLUE}[9/10] Nginx 配置检查...${NC}"
+echo "确保 nginx 已添加管理端路径:"
+echo ""
+echo "  location /admin {"
+echo "    alias /var/www/ai-canvas/admin;"
+echo "    try_files \$uri \$uri/ /admin/index.html;"
+echo "  }"
+echo ""
+
+# ====== 验证 ======
+
+echo -e "${BLUE}[10/10] 验证...${NC}"
 sleep 1
 remote_cmd "curl -s http://127.0.0.1:3000/api/health"
 echo ""
 
 echo -e "${GREEN}=== 部署完成 ===${NC}"
-echo "应用服务器: http://$APP_HOST:5179"
-echo "负载均衡入口: http://163.61.202.138:18080"
+echo "画布应用:   http://$APP_HOST:5179"
+echo "管理端:     http://$APP_HOST:5179/admin"
+echo "负载均衡:   http://163.61.202.138:18080"
+echo "管理端(LB): http://163.61.202.138:18080/admin"
+echo ""
+echo -e "${BLUE}⚠ 第一次部署需要手动操作：${NC}"
+echo "1. nginx 添加 /admin 路径配置后 reload"
+echo "2. 用 admin / 111111 登录管理端"

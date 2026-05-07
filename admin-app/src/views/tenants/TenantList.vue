@@ -26,7 +26,6 @@
     <!-- 新建/编辑弹窗 -->
     <el-dialog :title="editingId ? '编辑租户' : '新建租户'" v-model="dialogVisible">
       <el-form :model="form" label-width="100px">
-        <el-form-item label="编码" required><el-input v-model="form.code" :disabled="!!editingId" /></el-form-item>
         <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="联系人" required><el-input v-model="form.contactPerson" /></el-form-item>
         <el-form-item label="电话" required><el-input v-model="form.contactPhone" /></el-form-item>
@@ -67,7 +66,7 @@ const dialogVisible = ref(false)
 const rechargeVisible = ref(false)
 const editingId = ref('')
 const saving = ref(false)
-const form = reactive({ code: '', name: '', contactPerson: '', contactPhone: '', contactEmail: '', domain: '', seatNum: 0, subjectNum: 0, status: 'ACTIVE' })
+const form = reactive({ name: '', contactPerson: '', contactPhone: '', contactEmail: '', domain: '', seatNum: 0, subjectNum: 0, status: 'ACTIVE' } as Record<string, any>)
 const rechargeForm = reactive({ amount: 0, description: '', tenantId: '' })
 
 async function fetchList() {
@@ -78,7 +77,7 @@ async function fetchList() {
 }
 
 function openCreate() {
-  Object.assign(form, { code: '', name: '', contactPerson: '', contactPhone: '', contactEmail: '', domain: '', seatNum: 0, subjectNum: 0, status: 'ACTIVE' })
+  Object.assign(form, { name: '', contactPerson: '', contactPhone: '', contactEmail: '', domain: '', seatNum: 0, subjectNum: 0, status: 'ACTIVE' })
   editingId.value = ''
   dialogVisible.value = true
 }

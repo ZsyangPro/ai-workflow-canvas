@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express'
+import { randomUUID } from 'crypto'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
 import { authMiddleware, requireSuperAdmin } from '../middleware/auth'
@@ -27,7 +28,7 @@ const tenantSelect = {
 // ===== 租户 CRUD =====
 
 const createTenantSchema = z.object({
-  code: z.string().min(2, '租户编码至少2个字符'),
+  code: z.string().min(2).optional(),
   name: z.string().min(1, '租户名称不能为空'),
   domain: z.string().optional(),
   contactPerson: z.string().min(1, '联系人不能为空'),
@@ -106,7 +107,8 @@ router.post('/tenants', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  const { code, name, domain, contactPerson, contactPhone, contactEmail, logo, seatNum, subjectNum, expireTime } = parsed.data
+  const { name, domain, contactPerson, contactPhone, contactEmail, logo, seatNum, subjectNum, expireTime } = parsed.data
+  const code = parsed.data.code || randomUUID().slice(0, 8)
 
   try {
     const tenant = await prisma.tenant.create({
