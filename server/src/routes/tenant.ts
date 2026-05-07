@@ -262,6 +262,50 @@ router.get('/users', async (req: Request, res: Response): Promise<void> => {
   }
 })
 
+const updateTenantUserSchema = z.object({
+  subjectId: z.string().nullable().optional(),
+})
+
+// PATCH /api/tenant/users/:id — 编辑用户（绑定主体等）
+router.patch('/users/:id', async (req: Request, res: Response): Promise<void> => {
+  const parsed = updateTenantUserSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message })
+    return
+  }
+
+  const id = parseInt(paramId(req), 10)
+  const tid = tenantScope(req)
+
+  if (isNaN(id)) {
+    res.status(400).json({ error: '用户 ID 无效' })
+    return
+  }
+
+  // 校验用户属于本租户
+  const user = await prisma.user.findUnique({ where: { id } })
+  if (!user || user.tenantId !== tid) {
+    res.status(404).json({ error: '用户不存在' })
+    return
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { subjectId: parsed.data.subjectId },
+      select: userSelect,
+    })
+    res.json({ user: updated })
+  } catch (e: unknown) {
+    const err = e as { code?: string }
+    if (err.code === 'P2025') {
+      res.status(404).json({ error: '用户不存在' })
+    } else {
+      res.status(500).json({ error: '更新用户失败' })
+    }
+  }
+})
+
 const allocateUserSchema = z.object({
   amount: z.number().min(1, '分配金额必须大于0'),
 })

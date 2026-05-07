@@ -304,6 +304,17 @@ describe('算力流转', () => {
       .send({ amount: 999999 })
     expect(res.status).toBe(400)
   })
+
+  it('编辑用户绑定主体', async () => {
+    const endUser = await prisma.user.findFirst({ where: { username: uid(prefix, 'enduser') } })
+    // 绑定enduser到主体
+    const res = await request(app)
+      .patch(`/api/tenant/users/${endUser!.id}`)
+      .set('Authorization', `Bearer ${tenantAdminToken}`)
+      .send({ subjectId })
+    expect(res.status).toBe(200)
+    expect(res.body.user.subjectId).toBe(subjectId)
+  })
 })
 
 // ===== 钱包流水查询 =====
