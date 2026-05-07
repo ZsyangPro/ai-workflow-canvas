@@ -137,16 +137,24 @@ remote_cmd "
 "
 echo "模型配置已同步"
 
-# ====== Nginx 提示 ======
+# ====== Nginx 配置 ======
 
-echo -e "${BLUE}[9/10] Nginx 配置检查...${NC}"
-echo "确保 nginx 已添加管理端路径:"
-echo ""
-echo "  location /admin {"
-echo "    alias /var/www/ai-canvas/admin;"
-echo "    try_files \$uri \$uri/ /admin/index.html;"
-echo "  }"
-echo ""
+echo -e "${BLUE}[9/10] 更新 Nginx 配置...${NC}"
+
+remote_cmd "
+  NGINX_CONF=/etc/nginx/conf.d/ai-canvas.conf
+  if grep -q 'location /admin' \$NGINX_CONF 2>/dev/null; then
+    echo '  /admin 路径已存在，跳过'
+  else
+    sed -i '/^}/i \
+    location /admin { \
+        alias /var/www/ai-canvas/admin; \
+        try_files \$uri \$uri/ /admin/index.html; \
+    }' \$NGINX_CONF
+    systemctl reload nginx
+    echo '  /admin 路径已添加，nginx 已重载'
+  fi
+"
 
 # ====== 验证 ======
 
