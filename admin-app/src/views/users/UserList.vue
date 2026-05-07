@@ -5,22 +5,21 @@
     </div>
     <el-table :data="users" border stripe v-loading="loading">
       <el-table-column prop="username" label="用户名" />
-      <el-table-column prop="role" label="角色"><template #default="{ row }"><el-tag>{{ row.role }}</el-tag></template></el-table-column>
       <el-table-column prop="credits" label="算力" />
       <el-table-column prop="subjectId" label="所属主体" width="200"><template #default="{ row }">{{ row.subjectId ? row.subjectId.slice(0, 8) + '...' : '未绑定' }}</template></el-table-column>
       <el-table-column label="操作" width="200" v-if="canEdit">
         <template #default="{ row }">
-          <el-button size="small" type="primary" @click="openAllocate(row)">分配算力</el-button>
+          <el-button size="small" type="primary" @click="openAllocate(row)">分配/回收</el-button>
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
         </template>
       </el-table-column>
     </el-table>
-    <!-- 分配算力 -->
-    <el-dialog title="给用户分配算力" v-model="allocateVisible">
+    <!-- 分配/回收 -->
+    <el-dialog title="给用户分配/回收" v-model="allocateVisible">
       <el-form label-width="100px">
         <el-form-item label="来源"><el-select v-model="allocateSource"><el-option label="租户余额" value="tenant" /><el-option label="主体余额" value="subject" /></el-select></el-form-item>
         <el-form-item label="主体" v-if="allocateSource === 'subject'"><el-select v-model="allocateSubjectId" filterable placeholder="选择主体" @focus="loadSubjects"><el-option v-for="s in subjects" :key="s.id" :label="`${s.name} (${s.credits})`" :value="s.id" /></el-select></el-form-item>
-        <el-form-item label="金额"><el-input-number v-model="allocateAmount" :min="1" /></el-form-item>
+        <el-form-item label="金额（正数分配，负数回收）"><el-input-number v-model="allocateAmount" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="allocateVisible=false">取消</el-button><el-button type="primary" @click="handleAllocate">确认</el-button></template>
     </el-dialog>

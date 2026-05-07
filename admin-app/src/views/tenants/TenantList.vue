@@ -41,9 +41,9 @@
       </template>
     </el-dialog>
     <!-- 充值弹窗 -->
-    <el-dialog title="租户充值" v-model="rechargeVisible">
+    <el-dialog title="租户充值/回收" v-model="rechargeVisible">
       <el-form :model="rechargeForm" label-width="100px">
-        <el-form-item label="充值金额"><el-input-number v-model="rechargeForm.amount" :min="1" :max="10000000" /></el-form-item>
+        <el-form-item label="金额（正=充值，负=回收）"><el-input-number v-model="rechargeForm.amount" :max="10000000" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="rechargeForm.description" /></el-form-item>
       </el-form>
       <template #footer>

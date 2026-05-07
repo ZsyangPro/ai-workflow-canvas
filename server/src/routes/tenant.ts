@@ -238,10 +238,10 @@ router.delete('/subjects/:id', async (req: Request, res: Response): Promise<void
 // ===== 给主体分配算力 =====
 
 const allocateSubjectSchema = z.object({
-  amount: z.number().min(1, '分配金额必须大于0'),
+  amount: z.number().refine(v => v !== 0, '金额不能为0'),
 })
 
-// POST /api/tenant/subjects/:id/allocate — 租户给主体分配算力
+// POST /api/tenant/subjects/:id/allocate — 正数分配算力，负数回收算力
 router.post('/subjects/:id/allocate', async (req: Request, res: Response): Promise<void> => {
   const parsed = allocateSubjectSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -253,41 +253,54 @@ router.post('/subjects/:id/allocate', async (req: Request, res: Response): Promi
   const subjectId = paramId(req)
   const tid = tenantScope(req)
 
-  // 校验主体属于本租户
   const subject = await prisma.subject.findFirst({ where: { id: subjectId, tenantId: tid } })
-  if (!subject) {
-    res.status(404).json({ error: '主体不存在' })
-    return
-  }
+  if (!subject) { res.status(404).json({ error: '主体不存在' }); return }
+
+  const absAmount = Math.abs(amount)
+  const isRevoke = amount < 0
 
   try {
-    const [updated] = await prisma.$transaction([
-      prisma.tenant.update({
-        where: { id: tid, credits: { gte: amount } },
-        data: { credits: { decrement: amount } },
-        select: { id: true, credits: true },
-      }),
-      prisma.subject.update({
-        where: { id: subjectId },
-        data: { credits: { increment: amount } },
-      }),
-      prisma.creditTransaction.create({
-        data: {
-          tenantId: tid,
-          subjectId,
-          amount,
-          type: 'SUBJECT_ALLOCATE',
-          description: `租户向主体分配 ${amount} 算力`,
-        },
-      }),
-    ])
-    res.json({ tenant: updated })
+    if (isRevoke) {
+      // 回收：从主体退回给租户
+      const [updated] = await prisma.$transaction([
+        prisma.subject.update({
+          where: { id: subjectId, credits: { gte: absAmount } },
+          data: { credits: { decrement: absAmount } },
+        }),
+        prisma.tenant.update({
+          where: { id: tid },
+          data: { credits: { increment: absAmount } },
+          select: { id: true, credits: true },
+        }),
+        prisma.creditTransaction.create({
+          data: { tenantId: tid, subjectId, amount, type: 'SUBJECT_REVOKE', description: `从主体回收 ${absAmount} 算力` },
+        }),
+      ])
+      res.json({ tenant: updated })
+    } else {
+      // 分配：租户给主体
+      const [updated] = await prisma.$transaction([
+        prisma.tenant.update({
+          where: { id: tid, credits: { gte: amount } },
+          data: { credits: { decrement: amount } },
+          select: { id: true, credits: true },
+        }),
+        prisma.subject.update({
+          where: { id: subjectId },
+          data: { credits: { increment: amount } },
+        }),
+        prisma.creditTransaction.create({
+          data: { tenantId: tid, subjectId, amount, type: 'SUBJECT_ALLOCATE', description: `向主体分配 ${amount} 算力` },
+        }),
+      ])
+      res.json({ tenant: updated })
+    }
   } catch (e: unknown) {
     const err = e as { code?: string }
     if (err.code === 'P2025') {
-      res.status(400).json({ error: '租户算力不足' })
+      res.status(400).json({ error: isRevoke ? '主体算力不足' : '租户算力不足' })
     } else {
-      res.status(500).json({ error: '分配算力失败' })
+      res.status(500).json({ error: '操作失败' })
     }
   }
 })
@@ -374,72 +387,44 @@ router.patch('/users/:id', async (req: Request, res: Response): Promise<void> =>
 })
 
 const allocateUserSchema = z.object({
-  amount: z.number().min(1, '分配金额必须大于0'),
+  amount: z.number().refine(v => v !== 0, '金额不能为0'),
 })
 
-// POST /api/tenant/users/:id/allocate — 给用户分配算力
+// POST /api/tenant/users/:id/allocate — 正数分配，负数回收
 router.post('/users/:id/allocate', async (req: Request, res: Response): Promise<void> => {
   const parsed = allocateUserSchema.safeParse(req.body)
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0].message })
-    return
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return }
 
   const { amount } = parsed.data
   const userId = parseInt(paramId(req), 10)
   const tid = tenantScope(req)
+  if (isNaN(userId)) { res.status(400).json({ error: '用户 ID 无效' }); return }
 
-  if (isNaN(userId)) {
-    res.status(400).json({ error: '用户 ID 无效' })
-    return
-  }
-
-  // 校验用户属于本租户
   const user = await prisma.user.findUnique({ where: { id: userId } })
-  if (!user || user.tenantId !== tid) {
-    res.status(404).json({ error: '用户不存在' })
-    return
-  }
+  if (!user || user.tenantId !== tid) { res.status(404).json({ error: '用户不存在' }); return }
 
-  // 检查用户配额
-  const tenant = await prisma.tenant.findUnique({ where: { id: tid } })
-  if (tenant && tenant.seatNum > 0) {
-    const userCount = await prisma.user.count({ where: { tenantId: tid } })
-    if (userCount >= tenant.seatNum && !user.tenantId) {
-      res.status(400).json({ error: `已达到用户数量上限（${tenant.seatNum}）` })
-      return
-    }
-  }
+  const absAmount = Math.abs(amount)
+  const isRevoke = amount < 0
 
   try {
-    const [updated] = await prisma.$transaction([
-      prisma.tenant.update({
-        where: { id: tid, credits: { gte: amount } },
-        data: { credits: { decrement: amount } },
-        select: { id: true, credits: true },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data: { credits: { increment: amount }, tenantId: user.tenantId || tid },
-      }),
-      prisma.creditTransaction.create({
-        data: {
-          tenantId: tid,
-          userId,
-          amount,
-          type: 'USER_ALLOCATE',
-          description: `租户向用户 ${user.username} 分配 ${amount} 算力`,
-        },
-      }),
-    ])
-    res.json({ tenant: updated })
-  } catch (e: unknown) {
-    const err = e as { code?: string }
-    if (err.code === 'P2025') {
-      res.status(400).json({ error: '租户算力不足' })
+    if (isRevoke) {
+      const [updated] = await prisma.$transaction([
+        prisma.user.update({ where: { id: userId, credits: { gte: absAmount } }, data: { credits: { decrement: absAmount } } }),
+        prisma.tenant.update({ where: { id: tid }, data: { credits: { increment: absAmount } }, select: { id: true, credits: true } }),
+        prisma.creditTransaction.create({ data: { tenantId: tid, userId, amount, type: 'USER_REVOKE', description: `从用户 ${user.username} 回收 ${absAmount} 算力` } }),
+      ])
+      res.json({ tenant: updated })
     } else {
-      res.status(500).json({ error: '分配算力失败' })
+      const [updated] = await prisma.$transaction([
+        prisma.tenant.update({ where: { id: tid, credits: { gte: amount } }, data: { credits: { decrement: amount } }, select: { id: true, credits: true } }),
+        prisma.user.update({ where: { id: userId }, data: { credits: { increment: amount }, tenantId: user.tenantId || tid } }),
+        prisma.creditTransaction.create({ data: { tenantId: tid, userId, amount, type: 'USER_ALLOCATE', description: `向用户 ${user.username} 分配 ${amount} 算力` } }),
+      ])
+      res.json({ tenant: updated })
     }
+  } catch (e: unknown) {
+    if ((e as { code?: string }).code === 'P2025') res.status(400).json({ error: isRevoke ? '用户算力不足' : '租户算力不足' })
+    else res.status(500).json({ error: '操作失败' })
   }
 })
 
@@ -475,32 +460,28 @@ router.post('/subjects/:id/users/:uid/allocate', async (req: Request, res: Respo
     return
   }
 
+  const absAmount = Math.abs(amount)
+  const isRevoke = amount < 0
+
   try {
-    await prisma.$transaction([
-      prisma.subject.update({
-        where: { id: subjectId, credits: { gte: amount } },
-        data: { credits: { decrement: amount } },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data: { credits: { increment: amount }, subjectId },
-      }),
-      prisma.creditTransaction.create({
-        data: {
-          tenantId: tid,
-          subjectId,
-          userId,
-          amount,
-          type: 'SUBJECT_TO_USER',
-          description: `主体 ${subject.name} 向用户 ${user.username} 分配 ${amount} 算力`,
-        },
-      }),
-    ])
+    if (isRevoke) {
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: userId, credits: { gte: absAmount } }, data: { credits: { decrement: absAmount } } }),
+        prisma.subject.update({ where: { id: subjectId }, data: { credits: { increment: absAmount } } }),
+        prisma.creditTransaction.create({ data: { tenantId: tid, subjectId, userId, amount, type: 'SUBJECT_TO_USER_REVOKE', description: `从用户 ${user.username} 回收 ${absAmount} 算力，退回主体 ${subject.name}` } }),
+      ])
+    } else {
+      await prisma.$transaction([
+        prisma.subject.update({ where: { id: subjectId, credits: { gte: amount } }, data: { credits: { decrement: amount } } }),
+        prisma.user.update({ where: { id: userId }, data: { credits: { increment: amount }, subjectId } }),
+        prisma.creditTransaction.create({ data: { tenantId: tid, subjectId, userId, amount, type: 'SUBJECT_TO_USER', description: `主体 ${subject.name} 向用户 ${user.username} 分配 ${amount} 算力` } }),
+      ])
+    }
     res.json({ subjectId, userId, amount })
   } catch (e: unknown) {
     const err = e as { code?: string }
     if (err.code === 'P2025') {
-      res.status(400).json({ error: '主体算力不足' })
+      res.status(400).json({ error: isRevoke ? '用户算力不足' : '主体算力不足' })
     } else {
       res.status(500).json({ error: '分配算力失败' })
     }

@@ -192,45 +192,38 @@ router.delete('/tenants/:id', async (req: Request, res: Response): Promise<void>
 // ===== 租户充值 =====
 
 const rechargeSchema = z.object({
-  amount: z.number().min(1, '充值金额必须大于0').max(10000000, '充值金额过大'),
+  amount: z.number().refine(v => v !== 0, '金额不能为0').refine(v => Math.abs(v) <= 10000000, '金额过大'),
   description: z.string().optional(),
 })
 
-// POST /api/admin/tenants/:id/recharge — 给租户充值
+// POST /api/admin/tenants/:id/recharge — 正数充值，负数回收
 router.post('/tenants/:id/recharge', async (req: Request, res: Response): Promise<void> => {
   const parsed = rechargeSchema.safeParse(req.body)
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.issues[0].message })
-    return
-  }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0].message }); return }
 
   const { amount, description } = parsed.data
   const tenantId = paramId(req)
+  const absAmount = Math.abs(amount)
+  const isRevoke = amount < 0
 
   try {
-    const [tenant] = await prisma.$transaction([
-      prisma.tenant.update({
-        where: { id: tenantId },
-        data: { credits: { increment: amount } },
-        select: { id: true, credits: true },
-      }),
-      prisma.creditTransaction.create({
-        data: {
-          tenantId,
-          amount,
-          type: 'TENANT_RECHARGE',
-          description: description || `平台充值 ${amount} 算力`,
-        },
-      }),
-    ])
-    res.json({ tenant })
+    if (isRevoke) {
+      const [tenant] = await prisma.$transaction([
+        prisma.tenant.update({ where: { id: tenantId, credits: { gte: absAmount } }, data: { credits: { decrement: absAmount } }, select: { id: true, credits: true } }),
+        prisma.creditTransaction.create({ data: { tenantId, amount, type: 'TENANT_REVOKE', description: description || `平台回收 ${absAmount} 算力` } }),
+      ])
+      res.json({ tenant })
+    } else {
+      const [tenant] = await prisma.$transaction([
+        prisma.tenant.update({ where: { id: tenantId }, data: { credits: { increment: amount } }, select: { id: true, credits: true } }),
+        prisma.creditTransaction.create({ data: { tenantId, amount, type: 'TENANT_RECHARGE', description: description || `平台充值 ${amount} 算力` } }),
+      ])
+      res.json({ tenant })
+    }
   } catch (e: unknown) {
     const err = e as { code?: string }
-    if (err.code === 'P2025') {
-      res.status(404).json({ error: '租户不存在' })
-    } else {
-      res.status(500).json({ error: '充值失败' })
-    }
+    if (err.code === 'P2025') res.status(400).json({ error: isRevoke ? '租户算力不足' : '租户不存在' })
+    else res.status(500).json({ error: '操作失败' })
   }
 })
 

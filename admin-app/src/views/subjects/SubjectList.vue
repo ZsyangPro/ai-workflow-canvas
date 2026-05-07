@@ -13,8 +13,8 @@
       <el-table-column prop="contactPhone" label="电话" />
       <el-table-column label="操作" width="360" v-if="canEdit">
         <template #default="{ row }">
-          <el-button size="small" @click="openAllocate(row)">租户→主体分配</el-button>
-          <el-button size="small" @click="openAllocateToUser(row)">主体→用户分配</el-button>
+          <el-button size="small" @click="openAllocate(row)">分配/回收</el-button>
+          <el-button size="small" @click="openAllocateToUser(row)">主体→用户</el-button>
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row.id)">删除</el-button>
         </template>
@@ -34,15 +34,15 @@
       </template>
     </el-dialog>
     <!-- 租户→主体 -->
-    <el-dialog title="租户→主体分配算力" v-model="allocateVisible">
-      <el-form label-width="100px"><el-form-item label="金额"><el-input-number v-model="allocateAmount" :min="1" /></el-form-item></el-form>
+    <el-dialog title="分配/回收算力" v-model="allocateVisible">
+      <el-form label-width="100px"><el-form-item label="金额（正数分配，负数回收）"><el-input-number v-model="allocateAmount" /></el-form-item></el-form>
       <template #footer><el-button @click="allocateVisible=false">取消</el-button><el-button type="primary" @click="handleTenantAllocate">确认</el-button></template>
     </el-dialog>
     <!-- 主体→用户 -->
-    <el-dialog title="主体→用户分配算力" v-model="allocateUserVisible">
+    <el-dialog title="主体→用户算力" v-model="allocateUserVisible">
       <el-form label-width="100px">
         <el-form-item label="用户"><el-select v-model="allocateUserId" filterable placeholder="选择用户" @focus="loadTenantUsers" style="width:100%"><el-option v-for="u in tenantUsers" :key="u.id" :label="`${u.username} (余额:${u.credits})`" :value="u.id" /></el-select></el-form-item>
-        <el-form-item label="金额"><el-input-number v-model="allocateAmount" :min="1" /></el-form-item>
+        <el-form-item label="金额（正数分配，负数回收）"><el-input-number v-model="allocateAmount" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="allocateUserVisible=false">取消</el-button><el-button type="primary" @click="handleSubjectAllocate">确认</el-button></template>
     </el-dialog>
