@@ -299,25 +299,37 @@ describe('钱包流水', () => {
 
 // ===== 模型定价 =====
 describe('租户模型定价', () => {
-  it('设置租户模型定价', async () => {
-    // 确保有个模型
-    const model = await prisma.aiModel.findFirst({ where: { enabled: true } })
-    expect(model).toBeTruthy()
+  let testModelId: number
 
+  beforeAll(async () => {
+    // CI 数据库可能为空，确保有可用的模型
+    let model = await prisma.aiModel.findFirst({ where: { enabled: true } })
+    if (!model) {
+      model = await prisma.aiModel.create({
+        data: {
+          name: '__test_model__', provider: 'seedream', baseUrl: 'http://test',
+          apiKey: 'sk-test', modelName: 'test-model', category: 'image',
+          enabled: true, costCredits: 1,
+        },
+      })
+    }
+    testModelId = model.id
+  })
+
+  it('设置租户模型定价', async () => {
     const res = await request(app)
       .post('/api/tenant/model-pricing')
       .set('Authorization', `Bearer ${tenantAdminToken}`)
-      .send({ modelId: model!.id, computing: 10 })
+      .send({ modelId: testModelId, computing: 10 })
     expect(res.status).toBe(200)
     expect(res.body.pricing.computing).toBe(10)
   })
 
   it('租户定价不能低于平台定价', async () => {
-    const model = await prisma.aiModel.findFirst({ where: { enabled: true } })
     const res = await request(app)
       .post('/api/tenant/model-pricing')
       .set('Authorization', `Bearer ${tenantAdminToken}`)
-      .send({ modelId: model!.id, computing: 0 })
+      .send({ modelId: testModelId, computing: 0 })
     expect(res.status).toBe(400)
   })
 
