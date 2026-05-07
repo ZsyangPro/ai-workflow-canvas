@@ -64,8 +64,17 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   }
 
   // 检查算力（max_images 控制出图数量，消耗相应倍率算力）
-  const totalCost = aiModel.costCredits * (max_images || 1)
   const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
+
+  // 租户用户优先使用租户定价
+  let costCredits = aiModel.costCredits
+  if (user?.tenantId) {
+    const pricing = await prisma.tenantModelPricing.findUnique({
+      where: { tenantId_modelId: { tenantId: user.tenantId, modelId: aiModel.id } },
+    })
+    if (pricing) costCredits = pricing.computing
+  }
+  const totalCost = costCredits * (max_images || 1)
   if (!user || user.credits < totalCost) {
     res.status(402).json({ error: `算力不足，需要 ${totalCost} 算力，当前 ${user?.credits || 0} 算力` })
     return
@@ -103,6 +112,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       await prisma.creditTransaction.create({
         data: {
           userId: req.user!.userId,
+          tenantId: user?.tenantId || null,
+          subjectId: user?.subjectId || null,
           amount: -totalCost,
           type: 'GENERATION_DEDUCTION',
           relatedModelId: aiModel.id,
@@ -135,6 +146,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             prisma.creditTransaction.create({
               data: {
                 userId: req.user!.userId,
+                tenantId: user?.tenantId || null,
+                subjectId: user?.subjectId || null,
                 amount: totalCost,
                 type: 'GENERATION_REFUND',
                 relatedModelId: aiModel.id,
@@ -179,6 +192,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     await prisma.creditTransaction.create({
       data: {
         userId: req.user!.userId,
+        tenantId: user?.tenantId || null,
+        subjectId: user?.subjectId || null,
         amount: -totalCost,
         type: 'GENERATION_DEDUCTION',
         relatedModelId: aiModel.id,
@@ -217,6 +232,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             data: {
               canvasId: canvas.id,
               nodeId: nodeId || null,
+              tenantId: user?.tenantId || null,
               filename,
               mimeType,
               prompt,
@@ -258,6 +274,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
           prisma.creditTransaction.create({
             data: {
               userId: req.user!.userId,
+              tenantId: user?.tenantId || null,
+              subjectId: user?.subjectId || null,
               amount: totalCost,
               type: 'GENERATION_REFUND',
               relatedModelId: aiModel.id,

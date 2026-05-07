@@ -11,6 +11,8 @@ import generateRoutes from './routes/generate'
 import canvasRoutes from './routes/canvas'
 import assetsRoutes from './routes/assets'
 import creditsRoutes from './routes/credits'
+import adminRoutes from './routes/admin'
+import tenantRoutes from './routes/tenant'
 import prisma from './lib/prisma'
 
 const app = express()
@@ -39,6 +41,8 @@ app.use('/api/generate', generateRoutes)
 app.use('/api/canvas', canvasRoutes)
 app.use('/api/assets', assetsRoutes)
 app.use('/api/credits', creditsRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/tenant', tenantRoutes)
 
 app.use('/api/assets', express.static(path.join(__dirname, '../data/assets')))
 

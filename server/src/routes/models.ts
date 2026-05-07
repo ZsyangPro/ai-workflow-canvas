@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
 import prisma from '../lib/prisma'
-import { authMiddleware, adminMiddleware } from '../middleware/auth'
+import { authMiddleware, requireSuperAdmin } from '../middleware/auth'
 
 const router = Router()
 
@@ -18,8 +18,8 @@ router.get('/', authMiddleware, async (_req: Request, res: Response): Promise<vo
   }
 })
 
-// 其余端点需要管理员权限
-router.use(authMiddleware, adminMiddleware)
+// 其余端点需要超级管理员权限
+router.use(authMiddleware, requireSuperAdmin)
 
 const modelSelect = {
   id: true,

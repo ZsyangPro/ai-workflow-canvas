@@ -79,6 +79,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     const canvas = await prisma.canvas.create({
       data: {
         userId: req.user!.userId,
+        tenantId: req.user!.tenantId || null,
         name: parsed.data.name || '未命名画布',
       },
     })

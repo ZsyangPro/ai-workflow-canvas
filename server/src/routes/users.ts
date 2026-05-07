@@ -4,24 +4,28 @@ import { z } from 'zod'
 import path from 'path'
 import fs from 'fs/promises'
 import prisma from '../lib/prisma'
-import { authMiddleware, adminMiddleware } from '../middleware/auth'
+import { authMiddleware, requireSuperAdmin } from '../middleware/auth'
 
 const router = Router()
 
-router.use(authMiddleware, adminMiddleware)
+router.use(authMiddleware, requireSuperAdmin)
 
-const userSelect = { id: true, username: true, role: true, credits: true, createdAt: true, updatedAt: true }
+const userSelect = { id: true, username: true, role: true, credits: true, tenantId: true, subjectId: true, createdAt: true, updatedAt: true }
 
 const createUserSchema = z.object({
   username: z.string().min(2, '用户名至少需要2个字符'),
   password: z.string().min(6, '密码至少需要6个字符'),
-  role: z.enum(['USER', 'ADMIN']).optional(),
+  role: z.enum(['SUPER_ADMIN', 'TENANT_ADMIN', 'USER']).optional(),
+  tenantId: z.string().optional(),
+  subjectId: z.string().optional(),
 })
 
 const updateUserSchema = z.object({
   username: z.string().min(2, '用户名至少需要2个字符').optional(),
   password: z.string().min(6, '密码至少需要6个字符').optional(),
-  role: z.enum(['USER', 'ADMIN']).optional(),
+  role: z.enum(['SUPER_ADMIN', 'TENANT_ADMIN', 'USER']).optional(),
+  tenantId: z.string().optional(),
+  subjectId: z.string().optional(),
 })
 
 const creditSchema = z.object({
@@ -57,7 +61,13 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  const { username, password, role } = parsed.data
+  const { username, password, role, tenantId, subjectId } = parsed.data
+
+  // TENANT_ADMIN 必须绑定 tenantId
+  if (role === 'TENANT_ADMIN' && !tenantId) {
+    res.status(400).json({ error: '租户管理员必须指定租户' })
+    return
+  }
 
   const exists = await prisma.user.findUnique({ where: { username } })
   if (exists) {
@@ -68,7 +78,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const hashed = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
-      data: { username, password: hashed, role: role || 'USER' },
+      data: { username, password: hashed, role: role || 'USER', tenantId: tenantId || null, subjectId: subjectId || null },
       select: userSelect,
     })
     res.status(201).json({ user })

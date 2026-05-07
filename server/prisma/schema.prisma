@@ -8,23 +8,120 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===== 枚举 =====
+
+enum Role {
+  ADMIN        // @deprecated — 迁移后转为 SUPER_ADMIN
+  SUPER_ADMIN
+  TENANT_ADMIN
+  USER
+}
+
+enum TenantStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+}
+
+// ===== 租户与主体 =====
+
+model Tenant {
+  id            String       @id @default(uuid())
+  code          String       @unique
+  name          String
+  domain        String?      @unique
+  status        TenantStatus @default(ACTIVE)
+  credits       Int          @default(0)
+  seatNum       Int          @default(0)
+  subjectNum    Int          @default(0)
+  contactPerson String
+  contactPhone  String       @unique
+  contactEmail  String?
+  logo          String?
+  expireTime    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  subjects              Subject[]
+  users                 User[]
+  canvases              Canvas[]
+  assets                GeneratedAsset[]
+  creditTransactions    CreditTransaction[]
+  modelPricings         TenantModelPricing[]
+  fileCategories        TenantFileCategory[]
+
+  @@index([code])
+  @@index([status])
+}
+
+model Subject {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  name          String
+  status        String   @default("1")
+  credits       Int      @default(0)
+  contactPerson String?
+  contactPhone  String?
+  theme         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  users                User[]
+  creditTransactions   CreditTransaction[]
+
+  @@index([tenantId])
+}
+
+model TenantModelPricing {
+  id        String  @id @default(uuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  modelId   Int
+  model     AiModel @relation(fields: [modelId], references: [id])
+  computing Int     // 租户定价，必须 >= 平台 AiModel.costCredits
+
+  @@unique([tenantId, modelId])
+}
+
+model TenantFileCategory {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  sort      Int      @default(0)
+  createdAt DateTime @default(now())
+  assets    GeneratedAsset[]
+
+  @@index([tenantId])
+}
+
+// ===== 用户（扩展现有，支持三种角色） =====
+
 model User {
   id           Int      @id @default(autoincrement())
   username     String   @unique
   password     String
   role         Role     @default(USER)
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  subjectId    String?
+  subject      Subject? @relation(fields: [subjectId], references: [id])
   tokenVersion Int      @default(0)
   credits      Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  canvases             Canvas[]
-  creditTransactions    CreditTransaction[]
+
+  canvases            Canvas[]
+  creditTransactions  CreditTransaction[]
+
+  @@index([tenantId])
+  @@index([subjectId])
 }
 
-enum Role {
-  USER
-  ADMIN
-}
+// ===== AI 模型 =====
 
 model AiModel {
   id          Int      @id @default(autoincrement())
@@ -39,12 +136,18 @@ model AiModel {
   costCredits Int      @default(1)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  tenantPricings TenantModelPricing[]
 }
+
+// ===== 画布 =====
 
 model Canvas {
   id        Int              @id @default(autoincrement())
   userId    Int
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId  String?
+  tenant    Tenant?          @relation(fields: [tenantId], references: [id])
   name      String           @default("未命名画布")
   nodes     Json             @default("[]")
   edges     Json             @default("[]")
@@ -53,34 +156,50 @@ model Canvas {
   assets    GeneratedAsset[]
 
   @@index([userId])
+  @@index([tenantId])
 }
 
+// ===== 素材 =====
+
 model GeneratedAsset {
-  id        Int      @id @default(autoincrement())
-  canvasId  Int?
-  canvas    Canvas?  @relation(fields: [canvasId], references: [id], onDelete: SetNull)
-  nodeId    String?
-  filename  String
-  mimeType  String   @default("image/png")
-  prompt    String?
-  modelName String?
-  createdAt DateTime @default(now())
-  deletedAt DateTime?
+  id         Int      @id @default(autoincrement())
+  canvasId   Int?
+  canvas     Canvas?  @relation(fields: [canvasId], references: [id], onDelete: SetNull)
+  nodeId     String?
+  tenantId   String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  categoryId String?
+  category   TenantFileCategory? @relation(fields: [categoryId], references: [id])
+  filename   String
+  mimeType   String   @default("image/png")
+  prompt     String?
+  modelName  String?
+  createdAt  DateTime @default(now())
+  deletedAt  DateTime?
 
   @@index([canvasId])
   @@index([nodeId])
+  @@index([tenantId])
 }
+
+// ===== 算力流水（统一记录所有层级） =====
 
 model CreditTransaction {
   id             Int      @id @default(autoincrement())
-  userId         Int
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount         Int
-  type           String
+  amount         Int      // 正=入账，负=出账
+  type           String   // TENANT_RECHARGE | SUBJECT_ALLOCATE | USER_ALLOCATE | GENERATION_DEDUCTION | GENERATION_REFUND | ADMIN_GRANT | ADMIN_REVOKE
+  userId         Int?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId       String?
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  subjectId      String?
+  subject        Subject? @relation(fields: [subjectId], references: [id])
   relatedModelId Int?
   description    String?
   createdAt      DateTime @default(now())
 
   @@index([userId])
   @@index([userId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([subjectId, createdAt])
 }

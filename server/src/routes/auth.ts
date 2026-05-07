@@ -16,7 +16,6 @@ const REFRESH_TTL = '7d'
 
 const router = Router()
 
-// 速率限制
 const loginLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
@@ -67,11 +66,11 @@ router.post('/register', registerLimiter, async (req: Request, res: Response): P
     data: { username, password: hash },
   })
 
-  const payload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion }
+  const payload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion, tenantId: user.tenantId }
   const tokens = signTokens(payload)
 
   res.status(201).json({
-    user: { id: user.id, username: user.username, role: user.role },
+    user: { id: user.id, username: user.username, role: user.role, credits: user.credits, tenantId: user.tenantId, subjectId: user.subjectId },
     ...tokens,
   })
 })
@@ -98,11 +97,24 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
     return
   }
 
-  const payload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion }
+  // 检查租户是否可用（TENANT_ADMIN 和绑定租户的 USER）
+  if (user.tenantId) {
+    const tenant = await prisma.tenant.findUnique({ where: { id: user.tenantId } })
+    if (!tenant || tenant.status === 'DISABLED') {
+      res.status(403).json({ error: '租户已禁用' })
+      return
+    }
+    if (tenant.status === 'EXPIRED' || (tenant.expireTime && new Date(tenant.expireTime) < new Date())) {
+      res.status(403).json({ error: '租户已到期' })
+      return
+    }
+  }
+
+  const payload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion, tenantId: user.tenantId }
   const tokens = signTokens(payload)
 
   res.json({
-    user: { id: user.id, username: user.username, role: user.role },
+    user: { id: user.id, username: user.username, role: user.role, credits: user.credits, tenantId: user.tenantId, subjectId: user.subjectId },
     ...tokens,
   })
 })
@@ -123,13 +135,12 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
       return
     }
 
-    // 校验 tokenVersion：如果用户退出过，token 失效
     if (user.tokenVersion !== payload.tokenVersion) {
       res.status(401).json({ error: 'token 已失效，请重新登录' })
       return
     }
 
-    const newPayload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion }
+    const newPayload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion, tenantId: user.tenantId }
     const tokens = signTokens(newPayload)
     res.json(tokens)
   } catch {
@@ -140,7 +151,6 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
 // POST /api/auth/logout
 router.post('/logout', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    // 递增 tokenVersion 使所有已签发的 token 失效
     await prisma.user.update({
       where: { id: req.user!.userId },
       data: { tokenVersion: { increment: 1 } },
@@ -154,8 +164,15 @@ router.post('/logout', authMiddleware, async (req: Request, res: Response): Prom
 
 // GET /api/auth/me
 router.get('/me', authMiddleware, async (req: Request, res: Response): Promise<void> => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId } })
-  res.json({ user: { ...req.user, credits: user?.credits ?? 0 } })
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { id: true, username: true, role: true, credits: true, tenantId: true, subjectId: true },
+  })
+  if (!user) {
+    res.status(401).json({ error: '用户不存在' })
+    return
+  }
+  res.json({ user })
 })
 
 export default router
