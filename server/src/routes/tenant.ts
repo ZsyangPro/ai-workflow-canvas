@@ -10,6 +10,73 @@ function paramId(req: Request): string {
   return req.params.id as string
 }
 
+function getTenantId(req: Request): string {
+  const tenantId = req.scope?.tenantId
+  if (!tenantId) throw new Error('scopeMiddleware 未注入 tenantId')
+  return tenantId
+}
+
+// GET /api/tenant/dashboard — 租户概览（余额、配额、消耗统计）
+router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
+  const tid = getTenantId(req)
+  try {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const yesterdayStart = new Date(todayStart.getTime() - 86400000)
+    const weekStart = new Date(todayStart.getTime() - 7 * 86400000)
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const [tenant, subjectCount, userCount, stats] = await Promise.all([
+      prisma.tenant.findUnique({ where: { id: tid }, select: { credits: true, seatNum: true, subjectNum: true } }),
+      prisma.subject.count({ where: { tenantId: tid, deletedAt: null } }),
+      prisma.user.count({ where: { tenantId: tid } }),
+      // 消耗统计
+      Promise.all([
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: todayStart } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: yesterdayStart, lt: todayStart } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: weekStart } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: monthStart } }, _sum: { amount: true } }),
+        // 累计获得（充值+分配）
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['TENANT_RECHARGE'] } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['SUBJECT_ALLOCATE', 'USER_ALLOCATE', 'SUBJECT_TO_USER'] } }, _sum: { amount: true } }),
+        // 近7天每日消耗
+        prisma.$queryRaw<{ day: string; consumed: number }[]>`
+          SELECT DATE(ct."createdAt") as day, COALESCE(SUM(ABS(ct.amount)), 0)::int as consumed
+          FROM "CreditTransaction" ct
+          WHERE ct."tenantId" = ${tid}
+            AND ct.type = 'GENERATION_DEDUCTION'
+            AND ct."createdAt" >= ${weekStart}
+          GROUP BY DATE(ct."createdAt")
+          ORDER BY day ASC
+        `,
+      ]),
+    ])
+
+    if (!tenant) { res.status(404).json({ error: '租户不存在' }); return }
+
+    const [todayConsume, yesterdayConsume, weekConsume, monthConsume, totalRecharge, allocated, dailyConsume] = stats
+
+    res.json({
+      credits: tenant.credits,
+      subjectCount,
+      subjectLimit: tenant.subjectNum,
+      userCount,
+      userLimit: tenant.seatNum,
+      consume: {
+        today: -(todayConsume._sum.amount || 0),
+        yesterday: -(yesterdayConsume._sum.amount || 0),
+        week: -(weekConsume._sum.amount || 0),
+        month: -(monthConsume._sum.amount || 0),
+      },
+      totalRecharge: totalRecharge._sum.amount || 0,
+      allocated: allocated._sum.amount || 0,
+      dailyConsume,
+    })
+  } catch {
+    res.status(500).json({ error: '获取租户统计失败' })
+  }
+})
+
 function tenantScope(req: Request): string {
   const tenantId = req.scope?.tenantId
   if (!tenantId) throw new Error('scopeMiddleware 未注入 tenantId')

@@ -234,4 +234,48 @@ router.post('/tenants/:id/recharge', async (req: Request, res: Response): Promis
   }
 })
 
+// GET /api/admin/dashboard — 平台总览
+router.get('/dashboard', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const weekStart = new Date(todayStart.getTime() - 7 * 86400000)
+
+    const [tenantTotal, tenantActive, consume, recharge, topTenants, recentFlows, dailyConsume] = await Promise.all([
+      prisma.tenant.count(),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }),
+      prisma.creditTransaction.aggregate({ where: { type: 'GENERATION_DEDUCTION', createdAt: { gte: weekStart } }, _sum: { amount: true } }),
+      prisma.creditTransaction.aggregate({ where: { type: 'TENANT_RECHARGE' }, _sum: { amount: true } }),
+      prisma.tenant.findMany({ orderBy: { credits: 'desc' }, take: 5, select: { id: true, name: true, credits: true } }),
+      prisma.creditTransaction.findMany({ where: { type: { in: ['TENANT_RECHARGE', 'GENERATION_DEDUCTION'] } }, orderBy: { createdAt: 'desc' }, take: 10, select: { amount: true, type: true, description: true, createdAt: true, tenant: { select: { name: true } } } }),
+      prisma.$queryRaw<{ day: string; consumed: number }[]>`
+        SELECT DATE(ct."createdAt") as day, COALESCE(SUM(ABS(ct.amount)), 0)::int as consumed
+        FROM "CreditTransaction" ct
+        WHERE ct.type = 'GENERATION_DEDUCTION'
+          AND ct."createdAt" >= ${weekStart}
+        GROUP BY DATE(ct."createdAt")
+        ORDER BY day ASC
+      `,
+    ])
+
+    res.json({
+      tenantTotal,
+      tenantActive,
+      totalRecharge: recharge._sum.amount || 0,
+      weekConsume: -(consume._sum.amount || 0),
+      topTenants,
+      recentFlows: recentFlows.map(f => ({
+        amount: f.amount,
+        type: f.type,
+        description: f.description,
+        tenantName: (f as any).tenant?.name || '-',
+        createdAt: (f as any).createdAt,
+      })),
+      dailyConsume,
+    })
+  } catch {
+    res.status(500).json({ error: '获取看板数据失败' })
+  }
+})
+
 export default router

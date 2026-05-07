@@ -13,6 +13,10 @@
         text-color="#bfcbd9"
         active-text-color="#409EFF"
       >
+        <el-menu-item index="/dashboard">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>数据看板</span>
+        </el-menu-item>
         <template v-if="role === 'SUPER_ADMIN'">
           <el-menu-item index="/tenants">
             <el-icon><OfficeBuilding /></el-icon>
@@ -20,7 +24,7 @@
           </el-menu-item>
           <el-menu-item index="/system-users">
             <el-icon><UserFilled /></el-icon>
-            <span>系统用户</span>
+            <span>账号管理</span>
           </el-menu-item>
           <el-menu-item index="/models">
             <el-icon><Cpu /></el-icon>
@@ -56,7 +60,7 @@
             <Fold v-if="!collapsed" /><Expand v-else />
           </el-icon>
           <el-select
-            v-if="role === 'SUPER_ADMIN'"
+            v-if="role === 'SUPER_ADMIN' && showTenantSelector"
             v-model="selectedTenant"
             placeholder="选择租户（可选）"
             clearable
@@ -68,9 +72,12 @@
           >
             <el-option v-for="t in tenantOptions" :key="t.id" :label="t.name" :value="t.id" />
           </el-select>
-          <el-tag v-if="role === 'TENANT_ADMIN'" type="info" style="margin-left: 16px">
-            {{ user?.tenantId?.slice(0, 8) }}...
-          </el-tag>
+          <template v-if="dashboard && (role === 'TENANT_ADMIN' || showTenantSelector)">
+            <el-divider direction="vertical" />
+            <span class="stat">剩余算力 <b>{{ dashboard.credits }}</b></span>
+            <span class="stat">剩余主体 <b>{{ Math.max(0, (dashboard.subjectLimit || 0) - dashboard.subjectCount) }}</b>/{{ dashboard.subjectLimit || '∞' }}</span>
+            <span class="stat">剩余用户 <b>{{ Math.max(0, (dashboard.userLimit || 0) - dashboard.userCount) }}</b>/{{ dashboard.userLimit || '∞' }}</span>
+          </template>
         </div>
         <div class="header-right">
           <span class="user-info">{{ user?.username }} ({{ roleLabel }})</span>
@@ -78,7 +85,7 @@
         </div>
       </el-header>
       <el-main>
-        <router-view :key="route.fullPath" />
+        <router-view :key="route.fullPath + '-' + tenantKey" />
       </el-main>
     </el-container>
   </el-container>
@@ -88,7 +95,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { OfficeBuilding, UserFilled, User, Collection, Wallet, Coin, Folder, Fold, Expand, Cpu } from '@element-plus/icons-vue'
+import { OfficeBuilding, UserFilled, User, Collection, Wallet, Coin, Folder, Fold, Expand, Cpu, DataAnalysis } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,11 +106,24 @@ const user = currentUser
 const collapsed = ref(false)
 const selectedTenant = ref('')
 const tenantOptions = ref<{ id: string; name: string }[]>([])
+const tenantKey = ref(0)
+
+const dashboard = ref<{ credits: number; subjectCount: number; subjectLimit: number; userCount: number; userLimit: number } | null>(null)
+
+async function fetchDashboard() {
+  if (role.value === 'TENANT_ADMIN' || (role.value === 'SUPER_ADMIN' && selectedTenant.value)) {
+    const res = await apiFetch('/api/tenant/dashboard')
+    if (res.ok) dashboard.value = await res.json()
+  } else { dashboard.value = null }
+}
 
 const roleLabel = computed(() => {
   const m: Record<string, string> = { SUPER_ADMIN: '总后台', TENANT_ADMIN: '租户管理员', USER: '用户' }
   return m[role.value || ''] || ''
 })
+
+const tenantScopedRoutes = ['/subjects', '/users', '/wallet', '/model-pricing', '/files']
+const showTenantSelector = computed(() => tenantScopedRoutes.includes(route.path))
 
 async function searchTenants(query: string) {
   const res = await apiFetch(`/api/admin/tenants?limit=20&q=${encodeURIComponent(query)}`)
@@ -114,12 +134,14 @@ async function searchTenants(query: string) {
 }
 
 function onTenantChange() {
-  // 设置/清除 X-Tenant-Id header — 由 apiFetch 统一处理
   localStorage.setItem('admin_selected_tenant', selectedTenant.value || '')
+  tenantKey.value++
+  fetchDashboard()
 }
 
 onMounted(() => {
   selectedTenant.value = localStorage.getItem('admin_selected_tenant') || ''
+  fetchDashboard()
 })
 
 async function handleLogout() {
@@ -136,5 +158,7 @@ async function handleLogout() {
 .header-left { display: flex; align-items: center; }
 .header-right { display: flex; align-items: center; gap: 12px; }
 .collapse-btn { cursor: pointer; }
+.stat { font-size: 13px; color: #606266; white-space: nowrap; }
 .user-info { color: #666; font-size: 14px; }
+
 </style>

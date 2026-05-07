@@ -14,6 +14,12 @@ const router = createRouter({
       path: '/',
       component: () => import('../components/AppLayout.vue'),
       children: [
+        {
+          path: 'dashboard',
+          name: 'dashboard',
+          component: () => import('../views/DashboardPage.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
+        },
         // SUPER_ADMIN 专属
         {
           path: 'tenants',
@@ -72,7 +78,7 @@ const router = createRouter({
         },
         {
           path: '',
-          redirect: '/tenants',
+          redirect: '/dashboard',
         },
       ],
     },
@@ -94,12 +100,12 @@ router.beforeEach(async (to, _from, next) => {
 
   const roles = to.meta.roles as string[] | undefined
   if (roles && !roles.includes(user.role)) {
-    return next(user.role === 'SUPER_ADMIN' ? '/tenants' : '/subjects')
+    return next('/dashboard')
   }
 
   // 默认首页按角色
   if (to.path === '/') {
-    return next(user.role === 'SUPER_ADMIN' ? '/tenants' : '/subjects')
+    return next('/dashboard')
   }
 
   next()
