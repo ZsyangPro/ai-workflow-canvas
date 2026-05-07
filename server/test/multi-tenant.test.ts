@@ -275,6 +275,35 @@ describe('算力流转', () => {
       .send({ amount: 50 })
     expect(res.status).toBe(404)
   })
+
+  it('主体→用户分配算力', async () => {
+    // 给enduser改回原租户
+    const endUser = await prisma.user.findFirst({ where: { username: uid(prefix, 'enduser') } })
+    await prisma.user.update({ where: { id: endUser!.id }, data: { tenantId, credits: 0 } })
+
+    const res = await request(app)
+      .post(`/api/tenant/subjects/${subjectId}/users/${endUser!.id}/allocate`)
+      .set('Authorization', `Bearer ${tenantAdminToken}`)
+      .send({ amount: 100 })
+    expect(res.status).toBe(200)
+
+    // 验证主体余额减少
+    const subject = await prisma.subject.findUnique({ where: { id: subjectId } })
+    expect(subject?.credits).toBe(200) // 300-100
+
+    // 验证用户余额增加
+    const user = await prisma.user.findUnique({ where: { id: endUser!.id } })
+    expect(user?.credits).toBe(100)
+  })
+
+  it('主体算力不足时拒绝分配', async () => {
+    const endUser = await prisma.user.findFirst({ where: { username: uid(prefix, 'enduser') } })
+    const res = await request(app)
+      .post(`/api/tenant/subjects/${subjectId}/users/${endUser!.id}/allocate`)
+      .set('Authorization', `Bearer ${tenantAdminToken}`)
+      .send({ amount: 999999 })
+    expect(res.status).toBe(400)
+  })
 })
 
 // ===== 钱包流水查询 =====

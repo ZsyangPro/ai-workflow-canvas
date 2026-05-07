@@ -332,6 +332,70 @@ router.post('/users/:id/allocate', async (req: Request, res: Response): Promise<
   }
 })
 
+// POST /api/tenant/subjects/:id/users/:uid/allocate — 从主体余额给用户分配算力
+router.post('/subjects/:id/users/:uid/allocate', async (req: Request, res: Response): Promise<void> => {
+  const parsed = allocateUserSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message })
+    return
+  }
+
+  const { amount } = parsed.data
+  const subjectId = paramId(req)
+  const userId = parseInt(req.params.uid as string, 10)
+  const tid = tenantScope(req)
+
+  if (isNaN(userId)) {
+    res.status(400).json({ error: '用户 ID 无效' })
+    return
+  }
+
+  // 校验主体属于本租户
+  const subject = await prisma.subject.findFirst({ where: { id: subjectId, tenantId: tid } })
+  if (!subject) {
+    res.status(404).json({ error: '主体不存在' })
+    return
+  }
+
+  // 校验用户属于本租户
+  const user = await prisma.user.findUnique({ where: { id: userId } })
+  if (!user || user.tenantId !== tid) {
+    res.status(404).json({ error: '用户不存在' })
+    return
+  }
+
+  try {
+    await prisma.$transaction([
+      prisma.subject.update({
+        where: { id: subjectId, credits: { gte: amount } },
+        data: { credits: { decrement: amount } },
+      }),
+      prisma.user.update({
+        where: { id: userId },
+        data: { credits: { increment: amount }, subjectId },
+      }),
+      prisma.creditTransaction.create({
+        data: {
+          tenantId: tid,
+          subjectId,
+          userId,
+          amount,
+          type: 'SUBJECT_TO_USER',
+          description: `主体 ${subject.name} 向用户 ${user.username} 分配 ${amount} 算力`,
+        },
+      }),
+    ])
+    res.json({ subjectId, userId, amount })
+  } catch (e: unknown) {
+    const err = e as { code?: string }
+    if (err.code === 'P2025') {
+      res.status(400).json({ error: '主体算力不足' })
+    } else {
+      res.status(500).json({ error: '分配算力失败' })
+    }
+  }
+})
+
 // ===== 钱包流水 =====
 
 // GET /api/tenant/wallet/flows — 租户算力流水
