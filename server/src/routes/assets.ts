@@ -62,7 +62,8 @@ router.get('/', authMiddleware, async (req: Request, res: Response): Promise<voi
     }))
 
     res.json({ assets: result, total })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '获取资源列表失败' })
   }
 })
@@ -97,7 +98,8 @@ router.post('/upload', authMiddleware, async (req: Request, res: Response): Prom
       id: asset.id,
       localUrl: `/api/assets/${saved.filename}`,
     })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '上传失败' })
   }
 })
@@ -143,7 +145,8 @@ router.post('/save', authMiddleware, async (req: Request, res: Response): Promis
       id: asset.id,
       url: `/api/assets/${saved.filename}`,
     })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '收藏失败' })
   }
 })
@@ -197,7 +200,8 @@ router.get('/collected', authMiddleware, async (req: Request, res: Response): Pr
     }))
 
     res.json({ assets: result, total })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '获取收藏列表失败' })
   }
 })
@@ -248,7 +252,8 @@ router.get('/trash', authMiddleware, async (req: Request, res: Response): Promis
     }))
 
     res.json({ assets: result, total })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '获取垃圾箱列表失败' })
   }
 })
@@ -283,7 +288,8 @@ router.post('/:id/restore', authMiddleware, async (req: Request, res: Response):
     })
 
     res.json({ restored: true })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '恢复失败' })
   }
 })
@@ -319,7 +325,8 @@ router.delete('/:id', authMiddleware, async (req: Request, res: Response): Promi
     })
 
     res.json({ deleted: true })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '删除资源失败' })
   }
 })
@@ -345,7 +352,8 @@ router.delete('/', authMiddleware, async (req: Request, res: Response): Promise<
     })
 
     res.json({ deleted: result.count })
-  } catch {
+  } catch (e) {
+    console.error("[assets]", e)
     res.status(500).json({ error: '清空资源失败' })
   }
 })

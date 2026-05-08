@@ -36,7 +36,7 @@ describe('Admin 租户管理', () => {
       .post('/api/admin/tenants')
       .set('Authorization', `Bearer ${superAdminToken}`)
       .send({
-        code: tid('nx'),
+        code: tid(prefix, 'nx'),
         name: '宁夏广电',
         contactPerson: '张三',
         contactPhone: '13800000001',
@@ -44,7 +44,7 @@ describe('Admin 租户管理', () => {
         subjectNum: 10,
       })
     expect(res.status).toBe(201)
-    expect(res.body.tenant.code).toBe(tid('nx'))
+    expect(res.body.tenant.code).toBe(tid(prefix, 'nx'))
     expect(res.body.tenant.credits).toBe(0)
     tenantId = res.body.tenant.id
   })
@@ -53,7 +53,7 @@ describe('Admin 租户管理', () => {
     const res = await request(app)
       .post('/api/admin/tenants')
       .set('Authorization', `Bearer ${superAdminToken}`)
-      .send({ code: tid('nx'), name: '重复', contactPerson: 'x', contactPhone: '13800000002' })
+      .send({ code: tid(prefix, 'nx'), name: '重复', contactPerson: 'x', contactPhone: '13800000002' })
     expect(res.status).toBe(409)
   })
 
@@ -95,9 +95,9 @@ describe('Admin 租户管理', () => {
 
   it('软删除租户', async () => {
     await request(app).post('/api/admin/tenants').set('Authorization', `Bearer ${superAdminToken}`)
-      .send({ code: tid('del'), name: '待删除', contactPerson: 'x', contactPhone: '13800000009' })
+      .send({ code: tid(prefix, 'del'), name: '待删除', contactPerson: 'x', contactPhone: '13800000009' })
     const list = await request(app).get('/api/admin/tenants').set('Authorization', `Bearer ${superAdminToken}`)
-    const delId = list.body.tenants.find((t: any) => t.code === tid('del')).id
+    const delId = list.body.tenants.find((t: any) => t.code === tid(prefix, 'del')).id
 
     const res = await request(app)
       .delete(`/api/admin/tenants/${delId}`)
@@ -264,8 +264,8 @@ describe('算力流转', () => {
     await request(app)
       .post('/api/admin/tenants')
       .set('Authorization', `Bearer ${superAdminToken}`)
-      .send({ code: tid('other'), name: '其他租户', contactPerson: 'x', contactPhone: '13800000010' })
-    const otherTenant = await prisma.tenant.findUnique({ where: { code: tid('other') } })
+      .send({ code: tid(prefix, 'other'), name: '其他租户', contactPerson: 'x', contactPhone: '13800000010' })
+    const otherTenant = await prisma.tenant.findUnique({ where: { code: tid(prefix, 'other') } })
     const otherUser = await prisma.user.findFirst({ where: { username: uid(prefix, 'enduser') } })
     await prisma.user.update({ where: { id: otherUser!.id }, data: { tenantId: otherTenant!.id } })
 

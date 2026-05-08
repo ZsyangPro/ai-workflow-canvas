@@ -62,7 +62,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     }))
 
     res.json({ canvases: result, total })
-  } catch {
+  } catch (e) {
+    console.error('[canvas]', e)
     res.status(500).json({ error: '获取画布列表失败' })
   }
 })
@@ -91,7 +92,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         updatedAt: canvas.updatedAt.toISOString(),
       },
     })
-  } catch {
+  } catch (e) {
+    console.error("[canvas]", e)
     res.status(500).json({ error: '创建画布失败' })
   }
 })
@@ -119,7 +121,8 @@ router.get('/:id', async (req: Request, res: Response): Promise<void> => {
       createdAt: canvas.createdAt.toISOString(),
       updatedAt: canvas.updatedAt.toISOString(),
     })
-  } catch {
+  } catch (e) {
+    console.error("[canvas]", e)
     res.status(500).json({ error: '获取画布失败' })
   }
 })
@@ -153,7 +156,8 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
       },
     })
     res.json({ saved: true })
-  } catch {
+  } catch (e) {
+    console.error("[canvas]", e)
     res.status(500).json({ error: '保存画布失败' })
   }
 })
@@ -184,7 +188,8 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
       data: { name: parsed.data.name },
     })
     res.json({ canvas: { id: updated.id, name: updated.name } })
-  } catch {
+  } catch (e) {
+    console.error("[canvas]", e)
     res.status(500).json({ error: '重命名画布失败' })
   }
 })
@@ -208,7 +213,8 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     await prisma.canvas.delete({ where: { id } })
 
     res.json({ deleted: true })
-  } catch {
+  } catch (e) {
+    console.error("[canvas]", e)
     res.status(500).json({ error: '删除画布失败' })
   }
 })

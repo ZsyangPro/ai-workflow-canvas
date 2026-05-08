@@ -72,7 +72,8 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
       allocated: allocated._sum.amount || 0,
       dailyConsume,
     })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取租户统计失败' })
   }
 })
@@ -131,6 +132,7 @@ router.get('/subjects', async (req: Request, res: Response): Promise<void> => {
     ])
     res.json({ subjects, total })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     if (e instanceof Error && e.message.includes('scopeMiddleware')) {
       res.status(400).json({ error: e.message })
       return
@@ -171,7 +173,8 @@ router.post('/subjects', async (req: Request, res: Response): Promise<void> => {
       select: subjectSelect,
     })
     res.status(201).json({ subject })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '创建主体失败' })
   }
 })
@@ -200,6 +203,7 @@ router.patch('/subjects/:id', async (req: Request, res: Response): Promise<void>
     })
     res.json({ subject: updated })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '主体不存在' })
@@ -226,6 +230,7 @@ router.delete('/subjects/:id', async (req: Request, res: Response): Promise<void
     })
     res.json({ success: true })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '主体不存在' })
@@ -296,6 +301,7 @@ router.post('/subjects/:id/allocate', async (req: Request, res: Response): Promi
       res.json({ tenant: updated })
     }
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(400).json({ error: isRevoke ? '主体算力不足' : '租户算力不足' })
@@ -337,7 +343,8 @@ router.get('/users', async (req: Request, res: Response): Promise<void> => {
       prisma.user.count({ where }),
     ])
     res.json({ users, total })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取用户列表失败' })
   }
 })
@@ -377,6 +384,7 @@ router.patch('/users/:id', async (req: Request, res: Response): Promise<void> =>
     })
     res.json({ user: updated })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '用户不存在' })
@@ -423,6 +431,7 @@ router.post('/users/:id/allocate', async (req: Request, res: Response): Promise<
       res.json({ tenant: updated })
     }
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     if ((e as { code?: string }).code === 'P2025') res.status(400).json({ error: isRevoke ? '用户算力不足' : '租户算力不足' })
     else res.status(500).json({ error: '操作失败' })
   }
@@ -479,6 +488,7 @@ router.post('/subjects/:id/users/:uid/allocate', async (req: Request, res: Respo
     }
     res.json({ subjectId, userId, amount })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(400).json({ error: isRevoke ? '用户算力不足' : '主体算力不足' })
@@ -520,7 +530,8 @@ router.get('/wallet/flows', async (req: Request, res: Response): Promise<void> =
       prisma.creditTransaction.count({ where }),
     ])
     res.json({ flows, total })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取流水失败' })
   }
 })
@@ -550,7 +561,8 @@ router.get('/model-pricing', async (req: Request, res: Response): Promise<void> 
       orderBy: { modelId: 'asc' },
     })
     res.json({ pricings })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取定价列表失败' })
   }
 })
@@ -584,7 +596,8 @@ router.post('/model-pricing', async (req: Request, res: Response): Promise<void>
       select: pricingSelect,
     })
     res.json({ pricing })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '设置定价失败' })
   }
 })
@@ -605,6 +618,7 @@ router.delete('/model-pricing/:id', async (req: Request, res: Response): Promise
     })
     res.json({ success: true })
   } catch (e: unknown) {
+    console.error("[tenant]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '定价记录不存在' })
@@ -630,7 +644,8 @@ router.get('/files/categories', async (req: Request, res: Response): Promise<voi
       orderBy: { sort: 'asc' },
     })
     res.json({ categories })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取文件分类失败' })
   }
 })
@@ -649,7 +664,8 @@ router.post('/files/categories', async (req: Request, res: Response): Promise<vo
       data: { tenantId: tid, name: parsed.data.name, sort: parsed.data.sort ?? 0 },
     })
     res.status(201).json({ category })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '创建文件分类失败' })
   }
 })
@@ -667,7 +683,8 @@ router.delete('/files/categories/:id', async (req: Request, res: Response): Prom
     }
     await prisma.tenantFileCategory.delete({ where: { id } })
     res.json({ success: true })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '删除文件分类失败' })
   }
 })
@@ -693,7 +710,8 @@ router.get('/files', async (req: Request, res: Response): Promise<void> => {
       prisma.generatedAsset.count({ where }),
     ])
     res.json({ files, total })
-  } catch {
+  } catch (e) {
+    console.error("[tenant]", e)
     res.status(500).json({ error: '获取文件列表失败' })
   }
 })

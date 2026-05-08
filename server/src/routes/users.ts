@@ -48,7 +48,8 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
       prisma.user.count(),
     ])
     res.json({ users, total })
-  } catch {
+  } catch (e) {
+    console.error('[GET /api/users]', e)
     res.status(500).json({ error: '获取用户列表失败' })
   }
 })
@@ -82,7 +83,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       select: userSelect,
     })
     res.status(201).json({ user })
-  } catch {
+  } catch (e) {
+    console.error('[POST /api/users]', e)
     res.status(500).json({ error: '创建用户失败' })
   }
 })
@@ -95,7 +97,11 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     return
   }
 
-  const parsed = updateUserSchema.safeParse(req.body)
+  // 空密码视为不修改
+  const body = { ...req.body }
+  if (body.password === '') delete body.password
+
+  const parsed = updateUserSchema.safeParse(body)
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.issues[0].message })
     return
@@ -118,6 +124,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     if (err.code === 'P2025') {
       res.status(404).json({ error: '用户不存在' })
     } else {
+      console.error('[PATCH /api/users/:id]', e)
       res.status(500).json({ error: '更新用户失败' })
     }
   }
@@ -159,6 +166,7 @@ router.patch('/:id/credits', async (req: Request, res: Response): Promise<void> 
     if (err.code === 'P2025') {
       res.status(404).json({ error: '用户不存在' })
     } else {
+      console.error('[PATCH /api/users/:id/credits]', e)
       res.status(500).json({ error: '调整积分失败' })
     }
   }
@@ -195,6 +203,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     if (err.code === 'P2025') {
       res.status(404).json({ error: '用户不存在' })
     } else {
+      console.error('[DELETE /api/users/:id]', e)
       res.status(500).json({ error: '删除用户失败' })
     }
   }

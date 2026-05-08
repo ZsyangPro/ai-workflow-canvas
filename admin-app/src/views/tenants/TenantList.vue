@@ -83,7 +83,16 @@ function openCreate() {
 }
 
 function openEdit(row: any) {
-  Object.assign(form, row)
+  Object.assign(form, {
+    name: row.name,
+    contactPerson: row.contactPerson,
+    contactPhone: row.contactPhone,
+    contactEmail: row.contactEmail || '',
+    domain: row.domain || '',
+    seatNum: row.seatNum,
+    subjectNum: row.subjectNum,
+    status: row.status,
+  })
   editingId.value = row.id
   dialogVisible.value = true
 }

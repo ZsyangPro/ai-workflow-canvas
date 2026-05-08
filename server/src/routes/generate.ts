@@ -135,6 +135,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         res.write(`data: ${JSON.stringify(event)}\n\n`)
       }
     } catch (e: unknown) {
+      console.error("[generate]", e)
       // 退款
       if (deducted) {
         try {
@@ -182,6 +183,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         data: { credits: { decrement: totalCost } },
       })
     } catch (e: unknown) {
+      console.error("[generate]", e)
       if ((e as { code?: string }).code === 'P2025') {
         res.status(402).json({ error: `算力不足，需要 ${totalCost} 算力` })
         return
@@ -263,6 +265,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 
     res.json({ images: savedImages, credits: updated.credits })
   } catch (e: unknown) {
+    console.error("[generate]", e)
     // 生成或下载失败 — 退款
     if (deducted) {
       try {

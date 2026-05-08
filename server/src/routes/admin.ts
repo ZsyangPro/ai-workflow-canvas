@@ -73,7 +73,8 @@ router.get('/tenants', async (req: Request, res: Response): Promise<void> => {
       prisma.tenant.count(),
     ])
     res.json({ tenants, total })
-  } catch {
+  } catch (e) {
+    console.error("[admin]", e)
     res.status(500).json({ error: '获取租户列表失败' })
   }
 })
@@ -94,7 +95,8 @@ router.get('/tenants/:id', async (req: Request, res: Response): Promise<void> =>
       return
     }
     res.json({ tenant })
-  } catch {
+  } catch (e) {
+    console.error("[admin]", e)
     res.status(500).json({ error: '获取租户详情失败' })
   }
 })
@@ -128,6 +130,7 @@ router.post('/tenants', async (req: Request, res: Response): Promise<void> => {
     })
     res.status(201).json({ tenant })
   } catch (e: unknown) {
+    console.error("[admin]", e)
     const err = e as { code?: string }
     if (err.code === 'P2002') {
       res.status(409).json({ error: '租户编码或手机号已存在' })
@@ -159,6 +162,7 @@ router.patch('/tenants/:id', async (req: Request, res: Response): Promise<void> 
     })
     res.json({ tenant })
   } catch (e: unknown) {
+    console.error("[admin]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '租户不存在' })
@@ -180,6 +184,7 @@ router.delete('/tenants/:id', async (req: Request, res: Response): Promise<void>
     })
     res.json({ success: true })
   } catch (e: unknown) {
+    console.error("[admin]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '租户不存在' })
@@ -221,6 +226,7 @@ router.post('/tenants/:id/recharge', async (req: Request, res: Response): Promis
       res.json({ tenant })
     }
   } catch (e: unknown) {
+    console.error("[admin]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') res.status(400).json({ error: isRevoke ? '租户算力不足' : '租户不存在' })
     else res.status(500).json({ error: '操作失败' })
@@ -266,7 +272,8 @@ router.get('/dashboard', async (_req: Request, res: Response): Promise<void> => 
       })),
       dailyConsume,
     })
-  } catch {
+  } catch (e) {
+    console.error("[admin]", e)
     res.status(500).json({ error: '获取看板数据失败' })
   }
 })

@@ -46,6 +46,12 @@ app.use('/api/tenant', tenantRoutes)
 
 app.use('/api/assets', express.static(path.join(__dirname, '../data/assets')))
 
+// 全局错误处理 — 兜底所有未捕获的异常
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[unhandled]', req.method, req.path, err)
+  res.status(500).json({ error: '服务器内部错误' })
+})
+
 app.get('/api/health', async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`

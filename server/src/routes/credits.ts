@@ -58,7 +58,8 @@ router.get('/history', async (req: Request, res: Response): Promise<void> => {
       pageSize,
       totalPages: Math.ceil(total / pageSize),
     })
-  } catch {
+  } catch (e) {
+    console.error("[credits]", e)
     res.status(500).json({ error: '获取算力流水失败' })
   }
 })

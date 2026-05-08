@@ -7,7 +7,12 @@
     <title>AI画布 - 管理后台</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app"><p style="color:#909399;text-align:center;padding-top:100px;font-size:14px">管理后台加载中...</p></div>
+    <script>
+      window.onerror = function(msg, url, line) {
+        document.getElementById('app').innerHTML = '<div style="padding:40px;color:red"><h3>加载错误</h3><pre>'+msg+'\n'+url+' 行:'+line+'</pre><p>请尝试 Ctrl+Shift+R 强制刷新</p></div>'
+      }
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

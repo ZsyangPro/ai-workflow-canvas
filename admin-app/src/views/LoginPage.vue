@@ -1,13 +1,13 @@
 <template>
   <div class="login-container">
     <el-card class="login-card">
-      <template #header><h2 style="text-align:center;margin:0">AI画布管理</h2></template>
-      <el-form @keyup.enter="handleLogin" :model="form">
+      <template #header><h2 style="text-align:center;margin:0">AI画布 管理后台</h2></template>
+      <el-form @keyup.enter="handleLogin">
         <el-form-item>
-          <el-input v-model="form.username" placeholder="用户名" prefix-icon="User" />
+          <el-input v-model="form.username" placeholder="用户名" />
         </el-form-item>
         <el-form-item>
-          <el-input v-model="form.password" type="password" show-password placeholder="密码" prefix-icon="Lock" />
+          <el-input v-model="form.password" type="password" show-password placeholder="密码" />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleLogin" :loading="loading" style="width:100%">登录</el-button>
@@ -25,7 +25,6 @@ import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
 const { login } = useAuth()
-
 const form = reactive({ username: '', password: '' })
 const loading = ref(false)
 const error = ref('')
@@ -35,11 +34,8 @@ async function handleLogin() {
   loading.value = true
   try {
     const user = await login(form.username, form.password)
-    if (user.role === 'USER') {
-      error.value = '该账号无管理权限'
-      return
-    }
-    router.push(user.role === 'SUPER_ADMIN' ? '/tenants' : '/subjects')
+    if (user.role === 'USER') { error.value = '该账号无管理权限'; return }
+    router.push('/dashboard')
   } catch (e: unknown) {
     error.value = (e as Error).message
   } finally {

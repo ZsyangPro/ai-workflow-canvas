@@ -13,7 +13,8 @@ router.get('/', authMiddleware, async (_req: Request, res: Response): Promise<vo
       orderBy: { createdAt: 'desc' },
     })
     res.json({ models: models.map(maskModel) })
-  } catch {
+  } catch (e) {
+    console.error("[models]", e)
     res.status(500).json({ error: '获取模型列表失败' })
   }
 })
@@ -101,7 +102,8 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
       select: modelSelect,
     })
     res.status(201).json({ model: maskModel(model) })
-  } catch {
+  } catch (e) {
+    console.error("[models]", e)
     res.status(500).json({ error: '创建模型失败' })
   }
 })
@@ -135,6 +137,7 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
     })
     res.json({ model: maskModel(model) })
   } catch (e: unknown) {
+    console.error("[models]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '模型不存在' })
@@ -156,6 +159,7 @@ router.delete('/:id', async (req: Request, res: Response): Promise<void> => {
     await prisma.aiModel.delete({ where: { id } })
     res.json({ success: true })
   } catch (e: unknown) {
+    console.error("[models]", e)
     const err = e as { code?: string }
     if (err.code === 'P2025') {
       res.status(404).json({ error: '模型不存在' })

@@ -143,7 +143,8 @@ router.post('/refresh', async (req: Request, res: Response): Promise<void> => {
     const newPayload: AuthPayload = { userId: user.id, username: user.username, role: user.role, tokenVersion: user.tokenVersion, tenantId: user.tenantId }
     const tokens = signTokens(newPayload)
     res.json(tokens)
-  } catch {
+  } catch (e) {
+    console.error("[auth]", e)
     res.status(401).json({ error: 'refreshToken 无效或已过期' })
   }
 })
@@ -157,7 +158,8 @@ router.post('/logout', authMiddleware, async (req: Request, res: Response): Prom
     })
     clearTvCache(req.user!.userId)
     res.json({ success: true })
-  } catch {
+  } catch (e) {
+    console.error("[auth]", e)
     res.status(500).json({ error: '退出失败' })
   }
 })

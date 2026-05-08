@@ -12,8 +12,8 @@ export function uid(group: string, name: string) {
   return `test_${group}_${name}_${ts}`
 }
 
-export function tid(name: string) {
-  return `test_tenant_${name}_${ts}`
+export function tid(group: string, name: string) {
+  return `test_tenant_${group}_${name}_${ts}`
 }
 
 export async function cleanup(prefix: string) {

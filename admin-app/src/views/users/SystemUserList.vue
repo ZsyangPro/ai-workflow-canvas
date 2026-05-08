@@ -1,7 +1,7 @@
 <template>
   <div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2>系统用户管理</h2>
+      <h2>账号管理</h2>
       <el-button type="primary" @click="openCreate">新建用户</el-button>
     </div>
     <el-table :data="users" border stripe v-loading="loading">
@@ -9,7 +9,6 @@
       <el-table-column prop="role" label="角色">
         <template #default="{ row }"><el-tag>{{ row.role }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="credits" label="算力" />
       <el-table-column prop="tenantId" label="绑定租户" width="200">
         <template #default="{ row }">{{ row.tenantId || '-' }}</template>
       </el-table-column>
@@ -58,13 +57,15 @@ async function fetchList() {
 }
 
 function openCreate() { Object.assign(form, { username: '', password: '', role: 'USER', tenantId: '', subjectId: '' }); editingId.value = 0; dialogVisible.value = true }
-function openEdit(row: any) { Object.assign(form, row); editingId.value = row.id; dialogVisible.value = true }
+function openEdit(row: any) { Object.assign(form, { username: row.username, role: row.role, tenantId: row.tenantId || '', subjectId: row.subjectId || '' }); form.password = ''; editingId.value = row.id; dialogVisible.value = true }
 
 async function handleSave() {
   saving.value = true
   const url = editingId.value ? `/api/users/${editingId.value}` : '/api/users'
   const method = editingId.value ? 'PATCH' : 'POST'
-  const res = await apiFetch(url, { method, body: JSON.stringify(form) })
+  const body: Record<string, unknown> = { ...form }
+  if (!body.password) delete body.password
+  const res = await apiFetch(url, { method, body: JSON.stringify(body) })
   saving.value = false
   if (res.ok) { dialogVisible.value = false; fetchList(); ElMessage.success('保存成功') }
   else { const e = await res.json(); ElMessage.error(e.error) }

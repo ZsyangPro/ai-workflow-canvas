@@ -25,8 +25,11 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 remote_cmd() {
+  # Escape ' → '\'' so the command survives wrapping in '$1' single quotes
+  local esc="'\''"
+  local cmd="${1//\'/$esc}"
   ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
-    "ssh -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -p '$APP_PORT' 'root@$APP_HOST' '$1'"
+    "ssh -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -p '$APP_PORT' 'root@$APP_HOST' '$cmd'"
 }
 
 # ====== 前端：画布应用 ======
@@ -141,18 +144,26 @@ echo "模型配置已同步"
 
 echo -e "${BLUE}[9/10] 更新 Nginx 配置...${NC}"
 
+cat > /tmp/nginx_admin_block << 'NGINX_BLOCK'
+
+    location /admin {
+        alias /var/www/ai-canvas/admin;
+        try_files $uri $uri/ /admin/index.html;
+    }
+NGINX_BLOCK
+
+scp -o StrictHostKeyChecking=no -i "$SSH_KEY" -P "$JUMP_PORT" /tmp/nginx_admin_block "root@$JUMP_HOST:/tmp/"
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" -p "$JUMP_PORT" "root@$JUMP_HOST" \
+  "scp -o StrictHostKeyChecking=no -i ~/.ssh/jump_to_app -P '$APP_PORT' /tmp/nginx_admin_block 'root@$APP_HOST:/tmp/'"
+
 remote_cmd "
-  NGINX_CONF=/etc/nginx/conf.d/ai-canvas.conf
-  if grep -q 'location /admin' \$NGINX_CONF 2>/dev/null; then
-    echo '  /admin 路径已存在，跳过'
+  if grep -q /admin /etc/nginx/conf.d/ai-canvas.conf 2>/dev/null; then
+    echo /admin-already-configured
   else
-    sed -i '/^}/i \
-    location /admin { \
-        alias /var/www/ai-canvas/admin; \
-        try_files \$uri \$uri/ /admin/index.html; \
-    }' \$NGINX_CONF
+    cat /tmp/nginx_admin_block >> /etc/nginx/conf.d/ai-canvas.conf
+    rm /tmp/nginx_admin_block
     systemctl reload nginx
-    echo '  /admin 路径已添加，nginx 已重载'
+    echo /admin-added-nginx-reloaded
   fi
 "
 

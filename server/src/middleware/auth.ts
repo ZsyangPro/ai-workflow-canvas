@@ -58,7 +58,8 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
     tvCache.set(payload.userId, { version: user.tokenVersion, ts: Date.now() })
     req.user = payload
     next()
-  } catch {
+  } catch (e) {
+    console.error("[auth-middleware]", e)
     res.status(401).json({ error: 'token 无效或已过期' })
   }
 }

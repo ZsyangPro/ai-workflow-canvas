@@ -60,7 +60,7 @@ async function fetchList() {
 }
 
 function openCreate() { Object.assign(form, { name: '', provider: 'sophnet', modelName: '', apiKey: '', baseUrl: '', category: 'image', costCredits: 1, enabled: true }); editingId.value = 0; dialogVisible.value = true }
-function openEdit(row: any) { Object.assign(form, { ...row, apiKey: '' }); editingId.value = row.id; dialogVisible.value = true }
+function openEdit(row: any) { Object.assign(form, { name: row.name, provider: row.provider, modelName: row.modelName, apiKey: '', baseUrl: row.baseUrl, category: row.category, costCredits: row.costCredits, enabled: row.enabled, description: row.description || '' }); editingId.value = row.id; dialogVisible.value = true }
 
 async function handleSave() {
   saving.value = true
