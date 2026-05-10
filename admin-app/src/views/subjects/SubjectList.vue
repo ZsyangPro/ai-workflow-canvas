@@ -21,8 +21,8 @@
       </el-table-column>
     </el-table>
     <!-- 新建/编辑 -->
-    <el-dialog :title="editingId ? '编辑主体' : '新建主体'" v-model="dialogVisible">
-      <el-form :model="form" label-width="100px">
+    <el-dialog :title="editingId ? '编辑主体' : '新建主体'" v-model="dialogVisible" width="420px">
+      <el-form :model="form" label-width="80px">
         <el-form-item label="名称" required><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="状态"><el-select v-model="form.status"><el-option label="正常" value="1" /><el-option label="禁用" value="0" /></el-select></el-form-item>
         <el-form-item label="联系人"><el-input v-model="form.contactPerson" /></el-form-item>
@@ -34,15 +34,23 @@
       </template>
     </el-dialog>
     <!-- 租户→主体 -->
-    <el-dialog title="分配/回收算力" v-model="allocateVisible">
-      <el-form label-width="100px"><el-form-item label="金额（正数分配，负数回收）"><el-input-number v-model="allocateAmount" /></el-form-item></el-form>
+    <el-dialog title="分配/回收算力" v-model="allocateVisible" width="420px">
+      <el-form label-width="60px">
+        <el-form-item label="金额">
+          <el-input-number v-model="allocateAmount" style="width:100%" />
+          <div style="color:#999;font-size:12px;margin-top:4px">正数分配，负数回收</div>
+        </el-form-item>
+      </el-form>
       <template #footer><el-button @click="allocateVisible=false">取消</el-button><el-button type="primary" @click="handleTenantAllocate">确认</el-button></template>
     </el-dialog>
     <!-- 主体→用户 -->
-    <el-dialog title="主体→用户算力" v-model="allocateUserVisible">
-      <el-form label-width="100px">
-        <el-form-item label="用户"><el-select v-model="allocateUserId" filterable placeholder="选择用户" @focus="loadTenantUsers" style="width:100%"><el-option v-for="u in tenantUsers" :key="u.id" :label="`${u.username} (余额:${u.credits})`" :value="u.id" /></el-select></el-form-item>
-        <el-form-item label="金额（正数分配，负数回收）"><el-input-number v-model="allocateAmount" /></el-form-item>
+    <el-dialog title="主体→用户算力" v-model="allocateUserVisible" width="420px">
+      <el-form label-width="60px">
+        <el-form-item label="用户"><el-select v-model="allocateUserId" filterable placeholder="选择用户" @focus="loadTenantUsers" style="width:100%"><el-option v-for="u in tenantUsers.filter(u => u.subjectId === allocateSubjectId)" :key="u.id" :label="`${u.username} (余额:${u.credits})`" :value="u.id" /></el-select></el-form-item>
+        <el-form-item label="金额">
+          <el-input-number v-model="allocateAmount" style="width:100%" />
+          <div style="color:#999;font-size:12px;margin-top:4px">正数分配，负数回收</div>
+        </el-form-item>
       </el-form>
       <template #footer><el-button @click="allocateUserVisible=false">取消</el-button><el-button type="primary" @click="handleSubjectAllocate">确认</el-button></template>
     </el-dialog>

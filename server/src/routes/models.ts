@@ -6,13 +6,29 @@ import { authMiddleware, requireSuperAdmin } from '../middleware/auth'
 const router = Router()
 
 // GET 端点 — 所有登录用户可访问
-router.get('/', authMiddleware, async (_req: Request, res: Response): Promise<void> => {
+router.get('/', authMiddleware, async (req: Request, res: Response): Promise<void> => {
   try {
-    const models = await prisma.aiModel.findMany({
-      select: modelSelect,
-      orderBy: { createdAt: 'desc' },
+    const [models, pricings] = await Promise.all([
+      prisma.aiModel.findMany({
+        select: modelSelect,
+        orderBy: { createdAt: 'desc' },
+      }),
+      req.user?.tenantId
+        ? prisma.tenantModelPricing.findMany({ where: { tenantId: req.user.tenantId } })
+        : Promise.resolve([]),
+    ])
+
+    const pricingMap = new Map(pricings.map(p => [p.modelId, p.computing]))
+
+    const result = models.map(m => {
+      const base = maskModel(m)
+      if (pricingMap.has(m.id)) {
+        return { ...base, costCredits: pricingMap.get(m.id) }
+      }
+      return base
     })
-    res.json({ models: models.map(maskModel) })
+
+    res.json({ models: result })
   } catch (e) {
     console.error("[models]", e)
     res.status(500).json({ error: '获取模型列表失败' })

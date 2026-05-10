@@ -10,7 +10,7 @@ const router = Router()
 
 router.use(authMiddleware, requireSuperAdmin)
 
-const userSelect = { id: true, username: true, role: true, credits: true, tenantId: true, subjectId: true, createdAt: true, updatedAt: true }
+const userSelect = { id: true, username: true, role: true, credits: true, tenantId: true, subjectId: true, createdAt: true, updatedAt: true, tenant: { select: { name: true } } }
 
 const createUserSchema = z.object({
   username: z.string().min(2, '用户名至少需要2个字符'),
@@ -108,6 +108,8 @@ router.patch('/:id', async (req: Request, res: Response): Promise<void> => {
   }
 
   const data: Record<string, unknown> = { ...parsed.data }
+  if (data.tenantId === '') data.tenantId = null
+  if (data.subjectId === '') data.subjectId = null
   if (data.password) {
     data.password = await bcrypt.hash(data.password as string, 10)
   }

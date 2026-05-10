@@ -37,6 +37,10 @@
         </div>
       </div>
 
+      <div v-if="isGptImage && connectedImages.length > 1" class="text-xs text-amber-400/80 bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2">
+        当前模型仅支持一张参考图，多余的参考图将被忽略
+      </div>
+
       <!-- Model selector trigger -->
       <div
         ref="modelTriggerRef"
@@ -754,6 +758,8 @@ const handleClick = async () => {
     baseBody.images = connectedImages.value
   }
 
+  const genErrors: string[] = []
+
   if (isGptImage.value) {
     // GPT-Image: 单次请求，n 参数控制数量
     try {
@@ -773,13 +779,16 @@ const handleClick = async () => {
       } else if (res.status === 504) {
         error.value = '当前模型繁忙，试试其他模型'
       } else {
-        error.value = (data as Record<string, string>).error || '生成失败'
+        const msg = (data as Record<string, string>).error || '生成失败'
+        console.error('[GenerateNode] GPT-Image API error:', msg, data)
+        error.value = msg
       }
-    } catch {
+    } catch (e) {
+      console.error('[GenerateNode] GPT-Image network error:', e)
       error.value = '当前模型繁忙，试试其他模型'
     }
   } else {
-    // Seedream: 并行请求，每个出 1 张
+    // Seedream / Nano Banana: 并行请求，每个出 1 张
     const requests: Promise<{ b64?: string; error?: string }>[] = []
     for (let i = 0; i < count; i++) {
       requests.push(
@@ -795,9 +804,14 @@ const handleClick = async () => {
           } else if (res.status === 504) {
               return { error: '当前模型繁忙，试试其他模型' }
           } else {
-            return { error: (data as Record<string, string>).error || '生成失败' }
+            const msg = (data as Record<string, string>).error || '生成失败'
+            console.error('[GenerateNode] API error:', msg, data)
+            return { error: msg }
           }
-        }).catch(() => ({ error: '当前模型繁忙，试试其他模型' }))
+        }).catch((e) => {
+          console.error('[GenerateNode] network error:', e)
+          return { error: '当前模型繁忙，试试其他模型' }
+        })
       )
     }
 
@@ -806,6 +820,8 @@ const handleClick = async () => {
       if (result.b64) {
         images.value = [...images.value, { src: result.b64, base64: result.b64, collected: false }]
         progressMessage.value = `已生成 ${images.value.length}/${count} 张...`
+      } else if (result.error) {
+        genErrors.push(result.error)
       }
     }
   }
@@ -813,9 +829,10 @@ const handleClick = async () => {
   // Refresh credits
   credits.value = await refreshCredits()
 
-  if (images.value.length === 0) {
-    error.value = '所有请求均失败'
-  } else if (images.value.length < count) {
+  // Preserve specific error if already set (GPT-Image path), otherwise use collected errors
+  if (images.value.length === 0 && !error.value) {
+    error.value = genErrors.length > 0 ? genErrors[0] : '所有请求均失败'
+  } else if (images.value.length < count && !error.value) {
     error.value = `仅成功生成 ${images.value.length}/${count} 张`
   }
 

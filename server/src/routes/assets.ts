@@ -164,14 +164,10 @@ router.get('/collected', authMiddleware, async (req: Request, res: Response): Pr
     const userCanvasIds = userCanvases.map((c) => c.id)
 
     const where: Record<string, unknown> = {
-      AND: [
-        { deletedAt: null },
-        {
-          OR: [
-            { canvasId: { in: userCanvasIds } },
-            { canvasId: null },
-          ],
-        },
+      deletedAt: null,
+      OR: [
+        { canvasId: { in: userCanvasIds } },
+        { userId: req.user!.userId },
       ],
     }
 
@@ -219,14 +215,10 @@ router.get('/trash', authMiddleware, async (req: Request, res: Response): Promis
     const userCanvasIds = userCanvases.map((c) => c.id)
 
     const where: Record<string, unknown> = {
-      AND: [
-        { deletedAt: { not: null } },
-        {
-          OR: [
-            { canvasId: { in: userCanvasIds } },
-            { canvasId: null },
-          ],
-        },
+      deletedAt: { not: null },
+      OR: [
+        { canvasId: { in: userCanvasIds } },
+        { userId: req.user!.userId },
       ],
     }
 

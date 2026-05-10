@@ -115,6 +115,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   canvases            Canvas[]
+  generatedAssets     GeneratedAsset[]
   creditTransactions  CreditTransaction[]
 
   @@index([tenantId])
@@ -166,6 +167,8 @@ model GeneratedAsset {
   canvasId   Int?
   canvas     Canvas?  @relation(fields: [canvasId], references: [id], onDelete: SetNull)
   nodeId     String?
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   tenantId   String?
   tenant     Tenant?  @relation(fields: [tenantId], references: [id])
   categoryId String?
@@ -179,6 +182,7 @@ model GeneratedAsset {
 
   @@index([canvasId])
   @@index([nodeId])
+  @@index([userId])
   @@index([tenantId])
 }
 

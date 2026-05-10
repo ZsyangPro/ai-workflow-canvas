@@ -279,7 +279,7 @@ describe('算力流转', () => {
   it('主体→用户分配算力', async () => {
     // 给enduser改回原租户
     const endUser = await prisma.user.findFirst({ where: { username: uid(prefix, 'enduser') } })
-    await prisma.user.update({ where: { id: endUser!.id }, data: { tenantId, credits: 0 } })
+    await prisma.user.update({ where: { id: endUser!.id }, data: { tenantId, credits: 0, subjectId } })
 
     const res = await request(app)
       .post(`/api/tenant/subjects/${subjectId}/users/${endUser!.id}/allocate`)

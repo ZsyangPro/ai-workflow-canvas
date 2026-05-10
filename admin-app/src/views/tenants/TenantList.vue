@@ -41,9 +41,12 @@
       </template>
     </el-dialog>
     <!-- 充值弹窗 -->
-    <el-dialog title="租户充值/回收" v-model="rechargeVisible">
-      <el-form :model="rechargeForm" label-width="100px">
-        <el-form-item label="金额（正=充值，负=回收）"><el-input-number v-model="rechargeForm.amount" :max="10000000" /></el-form-item>
+    <el-dialog title="租户充值/回收" v-model="rechargeVisible" width="400px">
+      <el-form :model="rechargeForm" label-width="60px">
+        <el-form-item label="金额">
+          <el-input-number v-model="rechargeForm.amount" :max="10000000" style="width:100%" />
+          <div style="color:#999;font-size:12px;margin-top:4px">正数充值，负数回收</div>
+        </el-form-item>
         <el-form-item label="备注"><el-input v-model="rechargeForm.description" /></el-form-item>
       </el-form>
       <template #footer>
@@ -109,9 +112,14 @@ async function handleSave() {
 
 async function handleDelete(id: string) {
   await ElMessageBox.confirm('确认删除？', '提示', { type: 'warning' })
-  await apiFetch(`/api/admin/tenants/${id}`, { method: 'DELETE' })
-  ElMessage.success('已删除')
-  fetchList()
+  const res = await apiFetch(`/api/admin/tenants/${id}`, { method: 'DELETE' })
+  if (res.ok) {
+    ElMessage.success('已删除')
+    fetchList()
+  } else {
+    const data = await res.json().catch(() => ({}))
+    ElMessage.error((data as any).error || '删除失败')
+  }
 }
 
 function openRecharge(row: any) {

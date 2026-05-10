@@ -31,26 +31,32 @@
             <span>AI模型</span>
           </el-menu-item>
         </template>
-        <el-menu-item index="/subjects">
-          <el-icon><Collection /></el-icon>
-          <span>主体管理</span>
-        </el-menu-item>
-        <el-menu-item index="/users">
-          <el-icon><User /></el-icon>
-          <span>用户管理</span>
-        </el-menu-item>
-        <el-menu-item index="/wallet">
-          <el-icon><Wallet /></el-icon>
-          <span>钱包流水</span>
-        </el-menu-item>
-        <el-menu-item index="/model-pricing">
-          <el-icon><Coin /></el-icon>
-          <span>模型定价</span>
-        </el-menu-item>
+
+        <el-menu-item-group>
+          <template #title><span style="font-size:12px;color:#8b9db5">渠道商管理</span></template>
+          <el-menu-item index="/subjects">
+            <el-icon><Collection /></el-icon>
+            <span>主体管理</span>
+          </el-menu-item>
+          <el-menu-item index="/users">
+            <el-icon><User /></el-icon>
+            <span>用户管理</span>
+          </el-menu-item>
+          <el-menu-item index="/wallet">
+            <el-icon><Wallet /></el-icon>
+            <span>钱包流水</span>
+          </el-menu-item>
+          <el-menu-item index="/model-pricing">
+            <el-icon><Coin /></el-icon>
+            <span>模型定价</span>
+          </el-menu-item>
+        </el-menu-item-group>
+        <!-- TODO: 文件管理待完善
         <el-menu-item index="/files">
           <el-icon><Folder /></el-icon>
           <span>文件管理</span>
         </el-menu-item>
+        -->
       </el-menu>
     </el-aside>
     <el-container>
@@ -62,7 +68,7 @@
           <el-select
             v-if="role === 'SUPER_ADMIN' && showTenantSelector"
             v-model="selectedTenant"
-            placeholder="选择租户（可选）"
+            placeholder="选择租户"
             clearable
             filterable
             remote
@@ -122,7 +128,7 @@ const roleLabel = computed(() => {
   return m[role.value || ''] || ''
 })
 
-const tenantScopedRoutes = ['/subjects', '/users', '/wallet', '/model-pricing', '/files']
+const tenantScopedRoutes = ['/subjects', '/users', '/wallet', '/model-pricing']
 const showTenantSelector = computed(() => tenantScopedRoutes.includes(route.path))
 
 async function searchTenants(query: string) {

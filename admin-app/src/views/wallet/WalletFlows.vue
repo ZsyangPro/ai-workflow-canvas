@@ -3,18 +3,27 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h2>钱包流水</h2>
       <el-select v-model="filterType" placeholder="全部类型" clearable @change="fetchList" style="width:160px">
-        <el-option label="充值" value="TENANT_RECHARGE" />
-        <el-option label="主体分配" value="SUBJECT_ALLOCATE" />
-        <el-option label="用户分配" value="USER_ALLOCATE" />
-        <el-option label="消费扣减" value="GENERATION_DEDUCTION" />
-        <el-option label="退款" value="GENERATION_REFUND" />
+        <el-option v-for="t in typeOptions" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
     </div>
     <el-table :data="flows" border stripe v-loading="loading">
-      <el-table-column prop="createdAt" label="时间" width="180"><template #default="{ row }">{{ new Date(row.createdAt).toLocaleString() }}</template></el-table-column>
-      <el-table-column prop="type" label="类型" width="160"><template #default="{ row }"><el-tag>{{ row.type }}</el-tag></template></el-table-column>
-      <el-table-column prop="amount" label="金额"><template #default="{ row }"><span :style="{ color: row.amount > 0 ? '#67C23A' : '#F56C6C' }">{{ row.amount > 0 ? '+' : '' }}{{ row.amount }}</span></template></el-table-column>
-      <el-table-column prop="description" label="描述" />
+      <el-table-column prop="createdAt" label="时间" width="170"><template #default="{ row }">{{ new Date(row.createdAt).toLocaleString() }}</template></el-table-column>
+      <el-table-column label="类型" width="140">
+        <template #default="{ row }">
+          <span :style="{ color: flowStyle(row.type).color }">{{ flowStyle(row.type).label }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="变动" width="100" align="right">
+        <template #default="{ row }">
+          <span :style="{ color: flowStyle(row.type).color, fontWeight: 600 }">{{ flowAmount(row) }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="对象" width="160">
+        <template #default="{ row }">
+          {{ row.user?.username || row.subject?.name || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="description" label="详情" min-width="200" />
     </el-table>
     <el-pagination
       v-if="total > 20"
@@ -37,6 +46,40 @@ const total = ref(0)
 const loading = ref(false)
 const filterType = ref('')
 const currentPage = ref(1)
+
+const typeOptions = [
+  { label: '平台充值', value: 'TENANT_RECHARGE' },
+  { label: '平台回收', value: 'TENANT_REVOKE' },
+  { label: '分配→主体', value: 'SUBJECT_ALLOCATE' },
+  { label: '主体回收→租户', value: 'SUBJECT_REVOKE' },
+  { label: '分配→用户', value: 'USER_ALLOCATE' },
+  { label: '用户回收→租户', value: 'USER_REVOKE' },
+  { label: '主体→用户', value: 'SUBJECT_TO_USER' },
+  { label: '用户退回→主体', value: 'SUBJECT_TO_USER_REVOKE' },
+  { label: '用户消耗', value: 'GENERATION_DEDUCTION' },
+  { label: '生成退款', value: 'GENERATION_REFUND' },
+]
+
+const FLOW_STYLE: Record<string, { label: string; color: string; impact: 'in' | 'out' | 'neutral' }> = {
+  TENANT_RECHARGE:        { label: '平台充值',       color: '#67C23A', impact: 'in' },
+  TENANT_REVOKE:          { label: '平台回收',       color: '#F56C6C', impact: 'out' },
+  SUBJECT_ALLOCATE:       { label: '分配→主体',      color: '#F56C6C', impact: 'out' },
+  SUBJECT_REVOKE:         { label: '主体回收→租户',   color: '#67C23A', impact: 'in' },
+  USER_ALLOCATE:          { label: '分配→用户',      color: '#F56C6C', impact: 'out' },
+  USER_REVOKE:            { label: '用户回收→租户',   color: '#67C23A', impact: 'in' },
+  SUBJECT_TO_USER:        { label: '主体→用户',      color: '#909399', impact: 'neutral' },
+  SUBJECT_TO_USER_REVOKE: { label: '用户退回→主体',   color: '#909399', impact: 'neutral' },
+  GENERATION_DEDUCTION:   { label: '用户消耗',       color: '#909399', impact: 'neutral' },
+  GENERATION_REFUND:      { label: '生成退款',       color: '#909399', impact: 'neutral' },
+}
+
+function flowStyle(type: string) { return FLOW_STYLE[type] || { label: type, color: '#909399', impact: 'neutral' } }
+
+function flowAmount(row: any) {
+  const s = FLOW_STYLE[row.type]
+  if (!s || s.impact === 'neutral') return String(row.amount)
+  return (row.amount > 0 ? '+' : '') + row.amount
+}
 
 async function fetchList() {
   loading.value = true

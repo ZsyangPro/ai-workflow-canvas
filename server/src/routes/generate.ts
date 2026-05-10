@@ -234,6 +234,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
             data: {
               canvasId: canvas.id,
               nodeId: nodeId || null,
+              userId: req.user!.userId,
               tenantId: user?.tenantId || null,
               filename,
               mimeType,

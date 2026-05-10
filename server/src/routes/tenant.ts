@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express'
 import { z } from 'zod'
+import bcrypt from 'bcryptjs'
 import prisma from '../lib/prisma'
 import { authMiddleware, scopeMiddleware, requireTenantScope } from '../middleware/auth'
 
@@ -37,8 +38,8 @@ router.get('/dashboard', async (req: Request, res: Response): Promise<void> => {
         prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: weekStart } }, _sum: { amount: true } }),
         prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: 'GENERATION_DEDUCTION', createdAt: { gte: monthStart } }, _sum: { amount: true } }),
         // 累计获得（充值+分配）
-        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['TENANT_RECHARGE'] } }, _sum: { amount: true } }),
-        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['SUBJECT_ALLOCATE', 'USER_ALLOCATE', 'SUBJECT_TO_USER'] } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['TENANT_RECHARGE', 'TENANT_REVOKE'] } }, _sum: { amount: true } }),
+        prisma.creditTransaction.aggregate({ where: { tenantId: tid, type: { in: ['SUBJECT_ALLOCATE', 'SUBJECT_REVOKE', 'USER_ALLOCATE', 'USER_REVOKE'] } }, _sum: { amount: true } }),
         // 近7天每日消耗
         prisma.$queryRaw<{ day: string; consumed: number }[]>`
           SELECT DATE(ct."createdAt") as day, COALESCE(SUM(ABS(ct.amount)), 0)::int as consumed
@@ -325,6 +326,48 @@ const userSelect = {
 }
 
 // GET /api/tenant/users — 租户下用户列表
+const createTenantUserSchema = z.object({
+  username: z.string().min(2, '用户名至少2个字符'),
+  password: z.string().min(6, '密码至少6位'),
+  role: z.enum(['USER', 'TENANT_ADMIN']).optional().default('USER'),
+  subjectId: z.string().nullable().optional(),
+})
+
+// POST /api/tenant/users — 租户管理员创建用户
+router.post('/users', async (req: Request, res: Response): Promise<void> => {
+  const parsed = createTenantUserSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0].message })
+    return
+  }
+
+  const tid = tenantScope(req)
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { username: parsed.data.username } })
+    if (existing) {
+      res.status(409).json({ error: '用户名已存在' })
+      return
+    }
+
+    const hash = await bcrypt.hash(parsed.data.password, 10)
+    const user = await prisma.user.create({
+      data: {
+        username: parsed.data.username,
+        password: hash,
+        role: parsed.data.role,
+        tenantId: tid,
+        subjectId: parsed.data.subjectId || null,
+      },
+      select: userSelect,
+    })
+    res.status(201).json({ user })
+  } catch (e) {
+    console.error("[tenant]", e)
+    res.status(500).json({ error: '创建用户失败' })
+  }
+})
+
 router.get('/users', async (req: Request, res: Response): Promise<void> => {
   try {
     const offset = parseInt(req.query.offset as string, 10) || 0
@@ -350,10 +393,12 @@ router.get('/users', async (req: Request, res: Response): Promise<void> => {
 })
 
 const updateTenantUserSchema = z.object({
+  username: z.string().min(2, '用户名至少2个字符').optional(),
+  password: z.string().min(6, '密码至少6位').optional(),
   subjectId: z.string().nullable().optional(),
 })
 
-// PATCH /api/tenant/users/:id — 编辑用户（绑定主体等）
+// PATCH /api/tenant/users/:id — 编辑用户（用户名、密码、主体绑定）
 router.patch('/users/:id', async (req: Request, res: Response): Promise<void> => {
   const parsed = updateTenantUserSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -377,9 +422,14 @@ router.patch('/users/:id', async (req: Request, res: Response): Promise<void> =>
   }
 
   try {
+    const data: Record<string, unknown> = {}
+    if (parsed.data.username !== undefined) data.username = parsed.data.username
+    if (parsed.data.password !== undefined) data.password = await bcrypt.hash(parsed.data.password, 10)
+    if (parsed.data.subjectId !== undefined) data.subjectId = parsed.data.subjectId
+
     const updated = await prisma.user.update({
       where: { id },
-      data: { subjectId: parsed.data.subjectId },
+      data,
       select: userSelect,
     })
     res.json({ user: updated })
@@ -469,6 +519,12 @@ router.post('/subjects/:id/users/:uid/allocate', async (req: Request, res: Respo
     return
   }
 
+  // 校验用户已绑定到该主体
+  if (user.subjectId !== subjectId) {
+    res.status(400).json({ error: '用户未绑定到该主体，请先在用户管理中绑定' })
+    return
+  }
+
   const absAmount = Math.abs(amount)
   const isRevoke = amount < 0
 
@@ -525,6 +581,8 @@ router.get('/wallet/flows', async (req: Request, res: Response): Promise<void> =
           subjectId: true,
           description: true,
           createdAt: true,
+          user: { select: { username: true } },
+          subject: { select: { name: true } },
         },
       }),
       prisma.creditTransaction.count({ where }),

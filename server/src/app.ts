@@ -22,7 +22,7 @@ app.set('trust proxy', 1)
 app.use(helmet({ contentSecurityPolicy: false }))
 app.use(compression())
 app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true }))
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: '50mb' }))
 
 if (process.env.NODE_ENV !== 'test') {
   app.use(rateLimit({
@@ -33,6 +33,17 @@ if (process.env.NODE_ENV !== 'test') {
     message: { error: '请求过于频繁，请稍后再试' },
   }))
 }
+
+// 临时调试：记录所有 API 响应的状态码
+app.use('/api', (req, res, next) => {
+  const start = Date.now()
+  res.on('finish', () => {
+    if (res.statusCode >= 400) {
+      console.log(`[${res.statusCode}] ${req.method} ${req.originalUrl} | ${Date.now() - start}ms | auth:${!!req.headers.authorization?.slice(0,30)}`)
+    }
+  })
+  next()
+})
 
 app.use('/api/auth', authRoutes)
 app.use('/api/users', usersRoutes)
@@ -47,8 +58,13 @@ app.use('/api/tenant', tenantRoutes)
 app.use('/api/assets', express.static(path.join(__dirname, '../data/assets')))
 
 // 全局错误处理 — 兜底所有未捕获的异常
-app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[unhandled]', req.method, req.path, err)
+app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  if (err.type === 'entity.too.large') {
+    res.status(413).json({ error: '请求体过大，请压缩参考图后重试' })
+    return
+  }
+  const detail = err instanceof SyntaxError ? 'JSON解析失败' : err.message || String(err)
+  console.error('[unhandled]', req.method, req.path, '|', detail)
   res.status(500).json({ error: '服务器内部错误' })
 })
 

@@ -9,8 +9,8 @@
       <el-table-column prop="role" label="角色">
         <template #default="{ row }"><el-tag>{{ row.role }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="tenantId" label="绑定租户" width="200">
-        <template #default="{ row }">{{ row.tenantId || '-' }}</template>
+      <el-table-column label="绑定租户" width="200">
+        <template #default="{ row }">{{ row.tenant?.name || '-' }}</template>
       </el-table-column>
       <el-table-column label="操作" width="180">
         <template #default="{ row }">
@@ -19,13 +19,13 @@
         </template>
       </el-table-column>
     </el-table>
-    <el-dialog :title="editingId ? '编辑用户' : '新建用户'" v-model="dialogVisible">
-      <el-form :model="form" label-width="100px">
+    <el-dialog :title="editingId ? '编辑用户' : '新建用户'" v-model="dialogVisible" width="440px">
+      <el-form :model="form" label-width="70px">
         <el-form-item label="用户名" required><el-input v-model="form.username" :disabled="!!editingId" /></el-form-item>
         <el-form-item label="密码" :required="!editingId"><el-input v-model="form.password" type="password" /></el-form-item>
-        <el-form-item label="角色" required><el-select v-model="form.role"><el-option label="总后台" value="SUPER_ADMIN" /><el-option label="租户管理员" value="TENANT_ADMIN" /><el-option label="普通用户" value="USER" /></el-select></el-form-item>
-        <el-form-item label="租户" v-if="form.role === 'TENANT_ADMIN'"><el-input v-model="form.tenantId" placeholder="租户ID" /></el-form-item>
-        <el-form-item label="主体"><el-input v-model="form.subjectId" placeholder="主体ID（可选）" /></el-form-item>
+        <el-form-item label="角色" required><el-select v-model="form.role" style="width:100%"><el-option label="总后台" value="SUPER_ADMIN" /><el-option label="租户管理员" value="TENANT_ADMIN" /><el-option label="普通用户" value="USER" /></el-select></el-form-item>
+        <el-form-item label="租户" v-if="form.role === 'TENANT_ADMIN'"><el-select v-model="form.tenantId" filterable placeholder="选择租户" clearable @focus="loadTenants" style="width:100%"><el-option v-for="t in tenants" :key="t.id" :label="t.name" :value="t.id" /></el-select></el-form-item>
+        <el-form-item label="主体ID"><el-input v-model="form.subjectId" placeholder="可选" /></el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible=false">取消</el-button>
@@ -47,7 +47,14 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref(0)
 const saving = ref(false)
+const tenants = ref<any[]>([])
 const form = reactive({ username: '', password: '', role: 'USER', tenantId: '', subjectId: '' })
+
+async function loadTenants() {
+  if (tenants.value.length > 0) return
+  const res = await apiFetch('/api/admin/tenants')
+  if (res.ok) { const d = await res.json(); tenants.value = d.tenants }
+}
 
 async function fetchList() {
   loading.value = true

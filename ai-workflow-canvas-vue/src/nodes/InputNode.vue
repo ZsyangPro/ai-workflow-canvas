@@ -47,7 +47,7 @@
       <div class="relative">
         <textarea
           ref="textareaRef"
-          class="w-full resize-none rounded-lg p-2 text-sm text-zinc-200 placeholder-zinc-500 outline-none transition-colors overflow-y-auto textarea-scroll"
+          class="nodrag w-full resize-none rounded-lg p-2 text-sm text-zinc-200 placeholder-zinc-500 outline-none transition-colors overflow-y-auto textarea-scroll"
           :style="{ background: 'rgba(255,255,255,0.04)', minHeight: '72px', maxHeight: '240px' }"
           placeholder="输入画面描述，按 @ 引用素材"
           :value="data?.text || ''"

@@ -63,14 +63,16 @@ router.get('/tenants', async (req: Request, res: Response): Promise<void> => {
     const offset = parseInt(req.query.offset as string, 10) || 0
     const limit = Math.min(parseInt(req.query.limit as string, 10) || 50, 200)
 
+    const where = { deletedAt: null }
     const [tenants, total] = await Promise.all([
       prisma.tenant.findMany({
+        where,
         select: tenantSelect,
         orderBy: { createdAt: 'desc' },
         skip: offset,
         take: limit,
       }),
-      prisma.tenant.count(),
+      prisma.tenant.count({ where }),
     ])
     res.json({ tenants, total })
   } catch (e) {
