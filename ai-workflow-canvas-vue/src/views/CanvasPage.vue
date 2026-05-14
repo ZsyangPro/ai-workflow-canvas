@@ -15,6 +15,9 @@
         <template #node-generateNode="nodeProps">
           <GenerateNode v-bind="nodeProps" />
         </template>
+        <template #node-videoGenerateNode="nodeProps">
+          <VideoGenerateNode v-bind="nodeProps" />
+        </template>
 
         <Background :variant="BackgroundVariant.Dots" :gap="20" :size="1" color="#333" />
         <Controls position="bottom-left" />
@@ -235,6 +238,7 @@ import type { Connection, GraphNode, GraphEdge, VueFlowStore } from '@vue-flow/c
 import { LogOut, User, Shield, MousePointerClick, Video, ImageIcon, Type, Wand2, Trash2, ChevronDown, Home, Sparkles, Zap, Star } from 'lucide-vue-next'
 import InputNode from '../nodes/InputNode.vue'
 import GenerateNode from '../nodes/GenerateNode.vue'
+import VideoGenerateNode from '../nodes/VideoGenerateNode.vue'
 import ContextMenu from '../components/ContextMenu.vue'
 import ResourceLibraryPanel from '../components/ResourceLibraryPanel.vue'
 import CreditBalancePanel from '../components/CreditBalancePanel.vue'
@@ -358,6 +362,7 @@ const nodeColor = (node: GraphNode) => {
   switch (node.type) {
     case 'inputNode': return '#06b6d4'
     case 'generateNode': return '#10b981'
+	    case 'videoGenerateNode': return '#8b5cf6'
     default: return '#555'
   }
 }
@@ -382,7 +387,7 @@ const onInit = (instance: VueFlowStore) => {
   })
 }
 
-const addNode = (type: 'inputNode' | 'generateNode') => {
+const addNode = (type: 'inputNode' | 'generateNode' | 'videoGenerateNode') => {
   if (!menu.value || !vfInstance) return
   const pos = vfInstance.screenToFlowCoordinate({ x: menu.value.x, y: menu.value.y })
   nodes.value = [...nodes.value, {

@@ -22,12 +22,20 @@
       <Sparkles :size="16" class="text-gray-400" />
       <span class="text-sm text-gray-200">AI 生图</span>
     </div>
+
+    <div
+      @click="$emit('addNode', 'videoGenerateNode')"
+      class="flex items-center gap-3 px-3 py-2.5 hover:bg-white/10 cursor-pointer transition-colors"
+    >
+      <Video :size="16" class="text-gray-400" />
+      <span class="text-sm text-gray-200">AI 生视频</span>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Type, Sparkles } from 'lucide-vue-next'
+import { Type, Sparkles, Video } from 'lucide-vue-next'
 
 const props = defineProps<{
   x: number
@@ -35,11 +43,11 @@ const props = defineProps<{
 }>()
 
 defineEmits<{
-  addNode: [type: 'inputNode' | 'generateNode']
+  addNode: [type: 'inputNode' | 'generateNode' | 'videoGenerateNode']
 }>()
 
 const MENU_W = 192 // w-48
-const MENU_H = 140 // approx height
+const MENU_H = 190
 
 const clampedX = computed(() => Math.min(props.x, window.innerWidth - MENU_W - 8))
 const clampedY = computed(() => Math.min(props.y, window.innerHeight - MENU_H - 8))

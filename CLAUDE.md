@@ -83,7 +83,7 @@ CORS_ORIGIN=http://localhost:5173
 
 ## Database
 
-PostgreSQL with Prisma. Schema: User → Canvas → GeneratedAsset, User → CreditTransaction, AiModel (standalone). Binary targets include `rhel-openssl-1.0.x` for CentOS 7 production compatibility.
+PostgreSQL with Prisma. Schema: User → Canvas → GeneratedAsset, User → CreditTransaction, AiModel (standalone). Binary targets include `rhel-openssl-1.0.x` (用于宁夏 Ubuntu 22.04，通过 `PRISMA_QUERY_ENGINE_LIBRARY` 环境变量加载)、`debian-openssl-3.0.x`（备用）。
 
 ## CI (GitHub Actions)
 
@@ -143,7 +143,12 @@ Sophnet 平台有两个路径，需要**不同的 API Key**：
 
 See `DEPLOY.md` for full server inventory, SSH keys, access commands, and maintenance procedures. Key points:
 
-- **Entry**: `http://163.61.202.138:18080` (LB, needs config to reach `176.2.0.15:5179`). Use SSH tunnel for local access.
-- **App server**: `176.2.0.15` (via jump `163.61.202.173:10026`), no internet. Frontend built locally, backend tsc on server.
-- **Backend managed by**: `systemctl` (canvas-api.service)
-- **Deploy**: `./scripts/deploy.sh` — also syncs AiModel rows from local DB to production via UPSERT SQL.
+- **Entry**: `http://163.61.202.138:18080` (LB, 后端 `176.2.0.15:5179` + `176.2.0.4:5179`)。本地测试需 `--noproxy '*'` 绕过本地代理。
+- **App server**: `176.2.0.15`，Ubuntu 22.04，16C30G，Node 20.20.2。经由跳板机 `163.61.202.173:10026` 访问。服务器有 HTTPS 出站，但 npm registry 不通。
+- **SSH**: 跳板机用 `~/.ssh/ningxia_deploy` 密钥，应用服务器用密码 `Tcdn@2007!`。本地直连方式：
+  ```
+  sshpass -p 'Tcdn@2007!' ssh -o ProxyCommand="ssh -i ~/.ssh/ningxia_deploy -p 10026 root@163.61.202.173 'nc 176.2.0.15 10026'" -p 10026 root@176.2.0.15
+  ```
+- **PostgreSQL 14**: apt 安装，数据目录 `/var/lib/postgresql/14/main`，psql 路径 `/usr/bin/psql`
+- **Backend managed by**: `systemctl` (canvas-api.service)，含 `PRISMA_QUERY_ENGINE_LIBRARY` 环境变量
+- **Deploy**: `./scripts/deploy.sh` — 本地构建前端+TypeScript，SCP 上传，psql 执行迁移，模型同步。node_modules 需从本地打包上传（服务器 npm 不可用）。

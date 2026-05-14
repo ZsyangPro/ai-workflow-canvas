@@ -1,6 +1,6 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "rhel-openssl-1.0.x"]
+  binaryTargets = ["native", "rhel-openssl-1.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -206,4 +206,27 @@ model CreditTransaction {
   @@index([userId, createdAt])
   @@index([tenantId, createdAt])
   @@index([subjectId, createdAt])
+}
+
+// ===== 视频生成异步任务 =====
+
+model VideoTask {
+  id           Int      @id @default(autoincrement())
+  taskId       String   @unique
+  userId       Int
+  modelId      Int
+  canvasId     Int
+  nodeId       String?
+  prompt       String
+  duration     Int      @default(5)
+  status       String   @default("running")
+  videoUrl     String?
+  lastFrameUrl String?
+  costCredits  Int
+  refunded     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }

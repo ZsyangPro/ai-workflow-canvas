@@ -13,6 +13,7 @@ import assetsRoutes from './routes/assets'
 import creditsRoutes from './routes/credits'
 import adminRoutes from './routes/admin'
 import tenantRoutes from './routes/tenant'
+import generateVideoRoutes from './routes/generate-video'
 import prisma from './lib/prisma'
 
 const app = express()
@@ -49,6 +50,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/users', usersRoutes)
 app.use('/api/models', modelsRoutes)
 app.use('/api/generate', generateRoutes)
+app.use('/api/generate-video', generateVideoRoutes)
 app.use('/api/canvas', canvasRoutes)
 app.use('/api/assets', assetsRoutes)
 app.use('/api/credits', creditsRoutes)
