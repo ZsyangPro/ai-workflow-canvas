@@ -43,11 +43,16 @@ async function handleFile(e: Event) {
 
   uploading.value = true
   try {
-    const form = new FormData()
-    form.append('file', file)
+    // 读取为 base64 data URI
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error('读取文件失败'))
+      reader.readAsDataURL(file)
+    })
     const res = await apiFetch('/api/portal/upload', {
       method: 'POST',
-      body: form,
+      body: JSON.stringify({ image: base64 }),
     })
     if (res.ok) {
       const data = await res.json()
