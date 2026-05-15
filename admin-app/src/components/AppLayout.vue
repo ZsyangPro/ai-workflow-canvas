@@ -50,6 +50,10 @@
             <el-icon><Coin /></el-icon>
             <span>模型定价</span>
           </el-menu-item>
+          <el-menu-item index="/portal-blocks">
+            <el-icon><Monitor /></el-icon>
+            <span>门户装修</span>
+          </el-menu-item>
         </el-menu-item-group>
         <!-- TODO: 文件管理待完善
         <el-menu-item index="/files">
@@ -101,7 +105,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { OfficeBuilding, UserFilled, User, Collection, Wallet, Coin, Folder, Fold, Expand, Cpu, DataAnalysis } from '@element-plus/icons-vue'
+import { OfficeBuilding, UserFilled, User, Collection, Wallet, Coin, Folder, Fold, Expand, Cpu, DataAnalysis, Monitor } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -128,7 +132,7 @@ const roleLabel = computed(() => {
   return m[role.value || ''] || ''
 })
 
-const tenantScopedRoutes = ['/subjects', '/users', '/wallet', '/model-pricing']
+const tenantScopedRoutes = ['/subjects', '/users', '/wallet', '/model-pricing', '/portal-blocks']
 const showTenantSelector = computed(() => tenantScopedRoutes.includes(route.path))
 
 async function searchTenants(query: string) {

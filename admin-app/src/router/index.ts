@@ -77,6 +77,12 @@ const router = createRouter({
           meta: { roles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
         },
         {
+          path: 'portal-blocks',
+          name: 'portal-blocks',
+          component: () => import('../views/portal/PortalEditor.vue'),
+          meta: { roles: ['SUPER_ADMIN', 'TENANT_ADMIN'] },
+        },
+        {
           path: '',
           redirect: '/dashboard',
         },

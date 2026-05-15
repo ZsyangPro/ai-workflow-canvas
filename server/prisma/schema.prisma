@@ -50,6 +50,7 @@ model Tenant {
   creditTransactions    CreditTransaction[]
   modelPricings         TenantModelPricing[]
   fileCategories        TenantFileCategory[]
+  portalBlocks          PortalBlock[]
 
   @@index([code])
   @@index([status])
@@ -229,4 +230,21 @@ model VideoTask {
 
   @@index([userId])
   @@index([status])
+}
+
+// ===== 门户区块装修 =====
+
+model PortalBlock {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  type      String   // "hero" | "banner" | "features" | "models" | "stats" | "cta" | "divider"
+  sortOrder Int      @default(0)
+  enabled   Boolean  @default(true)
+  config    Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, sortOrder])
 }

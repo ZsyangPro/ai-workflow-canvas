@@ -11,6 +11,7 @@ const router = createRouter({
     { path: '/', component: HomePage, meta: { requiresAuth: true } },
     { path: '/login', component: LoginPage },
     { path: '/register', component: RegisterPage },
+    { path: '/portal/:tenantCode', component: () => import('../views/PortalPage.vue') },
     { path: '/canvas/:id', component: CanvasPage, meta: { requiresAuth: true } },
     { path: '/admin', component: AdminPage, meta: { requiresAuth: true, requiresAdmin: true } },
     { path: '/:pathMatch(.*)*', redirect: '/' },

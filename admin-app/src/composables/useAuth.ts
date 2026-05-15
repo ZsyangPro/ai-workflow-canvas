@@ -42,10 +42,10 @@ let refreshPromise: Promise<void> | null = null
 
 export function useAuth() {
   async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> || {}),
-    }
+    const isFormData = options.body instanceof FormData
+    const headers: Record<string, string> = {}
+    if (!isFormData) headers['Content-Type'] = 'application/json'
+    Object.assign(headers, options.headers || {})
     if (tokens.value) {
       headers['Authorization'] = `Bearer ${tokens.value.accessToken}`
     }

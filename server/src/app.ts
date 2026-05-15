@@ -13,6 +13,7 @@ import assetsRoutes from './routes/assets'
 import creditsRoutes from './routes/credits'
 import adminRoutes from './routes/admin'
 import tenantRoutes from './routes/tenant'
+import portalRoutes from './routes/portal'
 import generateVideoRoutes from './routes/generate-video'
 import prisma from './lib/prisma'
 
@@ -56,6 +57,7 @@ app.use('/api/assets', assetsRoutes)
 app.use('/api/credits', creditsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/tenant', tenantRoutes)
+app.use('/api/portal', portalRoutes)
 
 app.use('/api/assets', express.static(path.join(__dirname, '../data/assets')))
 
